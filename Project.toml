@@ -1,0 +1,10 @@
+name = "BatteryBusinessCase"
+uuid = "6d0dd5a4-2aa3-5676-9f1e-209ad3a36858"
+authors = ["Stefan de Lange <langestefan@msn.com>"]
+version = "0.1.0"
+
+[workspace]
+projects = ["test", "docs"]
+
+[compat]
+julia = "1.12"
