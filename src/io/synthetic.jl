@@ -76,8 +76,6 @@ function synthetic_load(grid::TimeGrid; annual_kwh::Real = 3000.0, seed::Integer
     return shape .* scale
 end
 
-isweekend(t::DateTime) = dayofweek(t) in (6, 7)
-
 """
     synthetic_prices(grid::TimeGrid; mean_eur = 0.09, seed = 3) -> Vector{Float64}
 

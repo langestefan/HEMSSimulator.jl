@@ -119,3 +119,11 @@ function checkseries(grid::TimeGrid, series::AbstractVector, name::AbstractStrin
     )
     return nothing
 end
+
+"""
+    isweekend(t::DateTime) -> Bool
+
+Whether `t` falls on a Saturday or Sunday. Used by load profiles and by time-of-use tariffs, which
+in the Netherlands are usually defined on working days only.
+"""
+isweekend(t::DateTime) = dayofweek(t) in (6, 7)

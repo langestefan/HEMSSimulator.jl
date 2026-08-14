@@ -32,7 +32,7 @@ forecast later means substituting the data sliced into each window, not restruct
 module BatteryBusinessCase
 
 using CSV: CSV
-using DataFrames: DataFrame, DataFrameRow, nrow
+using DataFrames: DataFrame, DataFrameRow, insertcols!, nrow
 using Dates: Dates, Date, DateTime, Hour, Millisecond, Minute, Period, dayofweek, dayofyear
 using ENTSOE: ENTSOE
 using HTTP: HTTP
@@ -72,6 +72,7 @@ include("solar/resample.jl")    # hourly to 15-minute irradiance through the cle
 include("assets/battery.jl")    # the first controllable asset
 
 include("market/tariff.jl")     # contracts and network tariffs
+include("market/scenarios.jl")  # the four headline regulatory regimes
 
 include("model/system.jl")      # the home and its precomputed exogenous series
 include("model/dispatch.jl")    # the JuMP model for one window
@@ -115,9 +116,11 @@ export self_consumption, self_sufficiency, balance_residual, onsite_sinks, onsit
 # Tariffs and settlement
 export AbstractGridTariff, FixedCapacityTariff, TimeVaryingGridTariff, Contract
 export retail_price, export_price, dispatch_prices, Bill, settle, annualise
+export NL_TARIFFS_2025, SCENARIO_NAMES, scenarios, peak_intervals, peak_transport_tariff
 
 # Economics and sizing
-export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year, sweep, best
+export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year
+export sweep, best, best_by_scenario
 
 # Resampling
 export AbstractResampler, StepHold, LinearInterp

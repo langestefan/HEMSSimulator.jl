@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning].
   irradiance through the clearness index and conserves each source interval's energy exactly.
 - On-disk response cache keyed by the request (`set_cache`, `get_cache`, `clear_cache!`), so a
   sizing sweep downloads a year once and re-runs against unchanged inputs.
+- The four headline regulatory scenarios as values: `scenarios` builds netting on/off ×
+  fixed/time-varying transport from one set of prices, `peak_transport_tariff` and `peak_intervals`
+  express a time-of-use network tariff, and `sweep` accepts the whole set to produce a scenario ×
+  size table that `best_by_scenario` reduces to one winner per regime.
+- `NL_TARIFFS_2025`, a named and dated set of Dutch tariff defaults, replacing the literals
+  previously scattered through the contract and tariff definitions.
+
+### Changed
+
+- Default `energy_tax` is now the 2025 *energiebelasting* rate of 0.10154 €/kWh; it was the 2024
+  rate of 0.10880 €/kWh.
 
 <!-- Links -->
 

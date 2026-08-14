@@ -88,3 +88,75 @@ function best(table::DataFrame; by::Symbol = :npv)
     end
     return table[index, :]
 end
+
+"""
+    sweep(system, weather, load_kw, contracts::NamedTuple, candidates; investment, options)
+
+Run a [`sweep`](@ref) under each of several regulatory scenarios and stack the results, with a
+`scenario` column naming each block. `contracts` is what [`scenarios`](@ref) returns.
+
+This is the headline table of the package: what a battery is worth is not one number but four, and
+they differ by more than the measurement noise of any single assumption.
+
+```julia
+table = sweep(home, weather, load, scenarios(grid; commodity, feed_in), candidates;
+              investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh))
+best_by_scenario(table)
+```
+
+Each scenario is simulated independently, because the contract changes the dispatch price signal and
+therefore the flows — not just the bill computed from them.
+"""
+function sweep(
+    system::HomeSystem,
+    weather::Weather,
+    load_kw::AbstractVector,
+    contracts::NamedTuple,
+    candidates::AbstractVector{<:AbstractAsset};
+    investment,
+    options::RunOptions = RunOptions(),
+)
+    isempty(contracts) && throw(ArgumentError("no scenarios given"))
+    frames = DataFrame[]
+    for name in keys(contracts)
+        table = sweep(
+            system,
+            weather,
+            load_kw,
+            contracts[name],
+            candidates;
+            investment,
+            options,
+        )
+        push!(frames, insertcols!(table, 1, :scenario => fill(name, nrow(table))))
+    end
+    return reduce(vcat, frames)
+end
+
+"""
+    best_by_scenario(table::DataFrame; by = :npv) -> DataFrame
+
+One row per scenario of a scenario [`sweep`](@ref) table: the candidate that maximises `by` within
+that scenario. Warns per scenario when the winner sits at the edge of the candidate range.
+
+Use this rather than [`best`](@ref) on a stacked table — `best` would return the single globally
+best row, which is almost always the most permissive scenario and says nothing about the others.
+"""
+function best_by_scenario(table::DataFrame; by::Symbol = :npv)
+    hasproperty(table, :scenario) || throw(
+        ArgumentError(
+            "table has no `scenario` column; it did not come from a scenario sweep",
+        ),
+    )
+    picks = Int[]
+    for scenario in unique(table.scenario)
+        rows = findall(==(scenario), table.scenario)
+        index = argmax(table[rows, by])
+        if index == 1 || index == length(rows)
+            @warn "optimum is at the edge of the candidate range; widen the sweep" scenario by index rows =
+                length(rows)
+        end
+        push!(picks, rows[index])
+    end
+    return table[picks, :]
+end

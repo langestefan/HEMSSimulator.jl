@@ -46,7 +46,7 @@ ones above it.
 | `core/` | `TimeGrid` (the 15-min grid everything aligns to), `resample` (`StepHold`/`LinearInterp`), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
 | `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), clear-sky reference, `PVArray` and production, `upsample_irradiance` |
 | `assets/` | Controllable assets. `battery.jl` today; EV, heat pump and DHW land here |
-| `market/` | `Contract` and grid tariffs, the settlement engine, NPV/IRR/payback |
+| `market/` | `Contract` and grid tariffs, `NL_TARIFFS_2025`, the four `scenarios`, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
 | `analysis/` | The sizing sweep |
 | `io/` | Response cache, Open-Meteo and ENTSO-E loaders, CSV schema, synthetic generators |
@@ -77,6 +77,14 @@ into the single meter balance and `cost_terms` into the objective, so nothing el
   `OPENMETEO_RADIATION_LAG` before resampling. This is verified empirically by a test that compares
   the irradiance-weighted centre of a recorded day against the clear-sky centre — not assumed.
   Open-Meteo also defaults wind to km/h; the loader asks for m/s.
+- **Netting and transport are billed differently, and it matters.** *Salderen* absorbs the commodity
+  price and the energy tax; the transport tariff is charged on physical flow and is never netted
+  (`settle`). So a time-of-use transport tariff rewards a battery in *both* netting regimes — the
+  four scenarios are two independent levers, not two versions of one. On the synthetic fortnight the
+  effects are about +20% (time-of-use transport) and +65% (ending netting) on annual savings.
+- **Tariff defaults are dated.** `NL_TARIFFS_2025` holds them; `energy_tax` and `tax_credit` change
+  every Belastingplan, and `capacity_tariff`/`standing_charge` are representative rather than
+  published figures. Never quote a business case without overriding them.
 - **Resampling is chosen per quantity, never uniformly.** Prices are step-held (a quarter-hour in an
   hourly-settled period cleared at that hour's price); temperature and wind are interpolated at
   interval midpoints; irradiance goes through the clearness index and conserves each source

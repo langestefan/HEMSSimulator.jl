@@ -1,4 +1,35 @@
 """
+    NL_TARIFFS_2025
+
+Published Dutch residential electricity charges, as they stood for 2025. These are the defaults on
+[`Contract`](@ref) and [`FixedCapacityTariff`](@ref).
+
+| Field | Value | What it is |
+|:--|--:|:--|
+| `energy_tax` | 0.10154 €/kWh | *energiebelasting*, first bracket, excluding VAT. The ODE surcharge was folded into it in 2023. |
+| `tax_credit` | 524.95 €/year | *vermindering energiebelasting*, excluding VAT |
+| `vat` | 0.21 | |
+| `capacity_tariff` | 400.0 €/year | representative *capaciteitstarief* for a 3×25 A connection, excluding VAT |
+| `standing_charge` | 72.0 €/year | representative supplier fixed fee, excluding VAT |
+
+**Check these before quoting a business case.** The tax rate and the credit are set annually in the
+Belastingplan and move every year — the 2024 rate was 0.10880 €/kWh, so a year-old default is
+already 7% wrong. The last two are not published national figures at all: the capacity tariff varies
+by network operator and connection size, and the standing charge varies by supplier. They are here
+so that an example runs, not so that a number can be quoted.
+
+Every one of them is a keyword on `Contract`, so overriding is a call argument, not a fork.
+"""
+const NL_TARIFFS_2025 = (
+    energy_tax = 0.10154,
+    tax_credit = 524.95,
+    vat = 0.21,
+    capacity_tariff = 400.0,
+    standing_charge = 72.0,
+)
+
+
+"""
     AbstractGridTariff
 
 Supertype for network operator charges. Concrete types are [`FixedCapacityTariff`](@ref) — today's
@@ -9,13 +40,17 @@ signal. Switching between them is a configuration change, not a code path.
 abstract type AbstractGridTariff end
 
 """
-    FixedCapacityTariff(; annual_eur = 400.0)
+    FixedCapacityTariff(; annual_eur = NL_TARIFFS_2025.capacity_tariff)
 
 Flat annual network charge in euros, excluding VAT, set by the connection size rather than by
-consumption. The default is representative of a 3×25 A residential connection.
+consumption. The default is representative of a 3×25 A residential connection; see
+[`NL_TARIFFS_2025`](@ref) for what "representative" is doing there.
+
+This is the tariff that makes a battery look bad on paper: no amount of load shifting reduces it, so
+storage can only earn against the commodity and tax components.
 """
 Base.@kwdef struct FixedCapacityTariff <: AbstractGridTariff
-    annual_eur::Float64 = 400.0
+    annual_eur::Float64 = NL_TARIFFS_2025.capacity_tariff
 end
 
 """
@@ -88,9 +123,9 @@ The physical connection limit is a property of the home, not the contract; it li
 Base.@kwdef struct Contract{G<:AbstractGridTariff}
     commodity::Vector{Float64}
     feed_in::Vector{Float64}
-    energy_tax::Float64 = 0.1088
-    tax_credit::Float64 = 524.95
-    vat::Float64 = 0.21
+    energy_tax::Float64 = NL_TARIFFS_2025.energy_tax
+    tax_credit::Float64 = NL_TARIFFS_2025.tax_credit
+    vat::Float64 = NL_TARIFFS_2025.vat
     feed_in_vat::Bool = false
     net_metering_fraction::Float64 = 1.0
     standing_charge::Float64 = 0.0
