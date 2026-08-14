@@ -84,10 +84,19 @@ into the single meter balance and `cost_terms` into the objective, so nothing el
 
 ## Data sources
 
-`ENTSOE.jl` is unregistered, so it is a hard dependency resolved through a `[sources]` **path**
-entry pointing at `../EuropeanPowerSystems/ENTSOE.jl`. A clone without that sibling checkout, CI
-included, will fail to resolve; switch the entry to a `{url = ...}` source once the package is
-registered.
+`ENTSOE.jl` is unregistered, so it is a hard dependency resolved through a `[sources]` **url** entry
+pinned to the `code-review-fixes` branch of `langestefan/EntsoE.jl` — a URL rather than a local path
+so a fresh clone and CI resolve without a sibling checkout. Drop the entry once the package is
+registered; to work against a local checkout meanwhile, `Pkg.develop(path = ...)`.
+
+**HTTP is pinned to 1.** Not by preference — ENTSOE.jl's cassette-driven tests depend on
+BrokenRecord 0.1, which caps HTTP at 1.11.0 and is unmaintained, so pinning that package to HTTP 2
+makes its own test environment unsatisfiable. Dropping BrokenRecord resolves and passes under HTTP
+2.6.4 but skips roughly 320 tests — Queries falls 207 → 44 and Smoke 154 → 0, precisely the tests
+that replay real HTTP traffic. Keeping one HTTP version across both packages is the cheaper trade
+for now. The way out is a test-only `OpenAPI.Clients.do_request(::Val{:playback}, …)` method in
+ENTSOE.jl: `httplib` is a `Val`-dispatched seam, so cassettes can be replayed with no HTTP patching
+at all. Note that `HTTP.get`'s `readtimeout` is renamed `request_timeout` in HTTP 2.
 
 Loaders are split into a fetch half and a pure-data half (`openmeteo_parse` / `resample_weather`,
 `entsoe_xml` / `parse_entsoe_prices`) so the alignment logic is tested against committed fixtures in

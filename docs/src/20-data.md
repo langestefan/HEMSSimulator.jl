@@ -25,12 +25,12 @@ no API key for non-commercial use. It publishes hourly; the loader refines that 
 
 Two details in that response are easy to get wrong, so the package handles both explicitly:
 
-  - **Radiation is stamped at the end of its hour.** Open-Meteo reports irradiance as the mean over
+- **Radiation is stamped at the end of its hour.** Open-Meteo reports irradiance as the mean over
     the *preceding* hour, while temperature at the same stamp is instantaneous. Radiation
     timestamps are therefore shifted back by [`BatteryBusinessCase.OPENMETEO_RADIATION_LAG`](@ref)
     before anything else happens. Skipping that step puts the modelled solar day an hour late,
     which quietly shifts every overlap between production and evening load.
-  - **Wind is requested in m/s.** The API defaults to km/h, and a 3.6× error there shows up only as
+- **Wind is requested in m/s.** The API defaults to km/h, and a 3.6× error there shows up only as
     a slightly cooler PV cell — plausible enough to survive review.
 
 The archive lags real time by about five days; hours with no data yet come back as `null`, are
@@ -54,7 +54,7 @@ prices = entsoe_prices(grid)      # EUR/kWh, token from ENV["ENTSOE_API_TOKEN"]
 contract = Contract(grid; commodity = prices .+ 0.02, feed_in = 0.04)
 ```
 
-[`entsoe_prices`](@ref) wraps [ENTSOE.jl](https://github.com/langestefan/ENTSOE.jl). It needs a
+[`entsoe_prices`](@ref) wraps [ENTSOE.jl](https://github.com/langestefan/EntsoE.jl). It needs a
 Transparency Platform security token — a UUID you request from `transparency@entsoe.eu` — which it
 picks up from `ENV["ENTSOE_API_TOKEN"]`, from `ENTSOE.set_config(; token = …)`, or from the `token`
 keyword.

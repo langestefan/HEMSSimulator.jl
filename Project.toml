@@ -23,17 +23,18 @@ SolarPosition = "5b9d1343-a731-5a90-8730-7bf8d89bf3eb"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [sources]
-# ENTSOE.jl is not in the General registry yet, so the day-ahead price loader resolves against a
-# local checkout. Point this at your own clone, or switch it to
-# `{url = "https://github.com/langestefan/ENTSOE.jl"}` once it is registered.
-ENTSOE = {path = "../EuropeanPowerSystems/ENTSOE.jl"}
+# ENTSOE.jl is not in the General registry yet, so the day-ahead price loader resolves straight
+# from git. A URL rather than a local path so that a fresh clone and CI can resolve without a
+# sibling checkout; drop the whole entry once the package is registered. To develop against a local
+# checkout instead, run `Pkg.develop(path = "../EuropeanPowerSystems/ENTSOE.jl")`.
+ENTSOE = {url = "https://github.com/langestefan/EntsoE.jl", rev = "code-review-fixes"}
 
 [compat]
 CSV = "0.10"
 DataFrames = "1"
 Dates = "1"
 ENTSOE = "1"
-HTTP = "2"
+HTTP = "1"
 HiGHS = "1"
 JSON = "1"
 JuMP = "1"

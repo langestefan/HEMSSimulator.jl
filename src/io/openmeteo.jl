@@ -80,7 +80,9 @@ function openmeteo_fetch(url::AbstractString; refresh::Bool = false, timeout::Re
             url;
             status_exception = false,
             connect_timeout = timeout,
-            request_timeout = timeout,
+            # HTTP 2 renames this to `request_timeout`; the package is pinned to HTTP 1 because
+            # ENTSOE.jl's cassette-driven tests cannot run above 1.11.
+            readtimeout = timeout,
         )
         body = String(response.body)
         response.status == 200 && return body
