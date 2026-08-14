@@ -89,6 +89,7 @@ include("market/settlement.jl") # the Dutch bill, computed from the flows
 include("market/economics.jl")  # NPV, IRR, payback
 
 include("analysis/sizing.jl")   # the sizing sweep
+include("analysis/sizing_lp.jl")# the idealised bound the sweep is checked against
 
 include("io/cache.jl")          # on-disk response cache, so a sweep downloads once
 include("io/openmeteo.jl")      # ERA5 reanalysis weather
@@ -135,7 +136,7 @@ export NL_TARIFFS_2025, SCENARIO_NAMES, scenarios, peak_intervals, peak_transpor
 
 # Economics and sizing
 export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year
-export sweep, best, best_by_scenario
+export sweep, best, best_by_scenario, size_lp, capital_recovery_factor
 
 # Resampling
 export AbstractResampler, StepHold, LinearInterp

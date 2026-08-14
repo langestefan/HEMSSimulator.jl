@@ -37,8 +37,7 @@ function dhw_draw(
     0 <= morning_share <= 1 ||
         throw(ArgumentError("morning_share must be in [0, 1], got $morning_share"))
     litres_per_day >= 0 || throw(ArgumentError("litres_per_day must be non-negative"))
-    setpoint_c > cold_inlet_c ||
-        throw(ArgumentError("setpoint_c must exceed cold_inlet_c"))
+    setpoint_c > cold_inlet_c || throw(ArgumentError("setpoint_c must exceed cold_inlet_c"))
 
     times = timestamps(grid)
     shape = zeros(Float64, grid.n)
@@ -200,12 +199,8 @@ end
 function add_variables!(model::Model, tank::WaterTank, ctx::DispatchContext)
     n = ctx.grid.n
     power = @variable(model, [1:n], lower_bound = 0, upper_bound = tank.max_power_kw)
-    energy = @variable(
-        model,
-        [1:n],
-        lower_bound = 0,
-        upper_bound = tank_capacity_kwh(tank),
-    )
+    energy =
+        @variable(model, [1:n], lower_bound = 0, upper_bound = tank_capacity_kwh(tank),)
     shortfall = @variable(model, [1:n], lower_bound = 0)
     draw = _tank_draw(tank, ctx)
     # Hot water the tank could not supply. An empty tank cannot deliver, so this has to be a
@@ -221,10 +216,9 @@ function add_constraints!(model::Model, tank::WaterTank, ctx::DispatchContext, v
     # Standing loss is proportional to the temperature above the surrounding air, and tank
     # temperature is affine in stored energy, so the whole thing stays linear. Evaluated on the
     # previous state, which at a 15-minute step is indistinguishable from the implicit form.
-    loss_slope = tank.standing_loss_w_per_k / 1000 * (tank.setpoint_c - tank.cold_inlet_c) /
-                 capacity
-    loss_offset =
-        tank.standing_loss_w_per_k / 1000 * (tank.cold_inlet_c - tank.ambient_c)
+    loss_slope =
+        tank.standing_loss_w_per_k / 1000 * (tank.setpoint_c - tank.cold_inlet_c) / capacity
+    loss_offset = tank.standing_loss_w_per_k / 1000 * (tank.cold_inlet_c - tank.ambient_c)
     gain(k) = dt * cop(tank.cop_model, ctx.inputs.t_amb[k]) * vars.power[k]
     decay(previous) = dt * (loss_slope * previous + loss_offset)
 
@@ -233,8 +227,7 @@ function add_constraints!(model::Model, tank::WaterTank, ctx::DispatchContext, v
     @constraint(
         model,
         [k = 2:n],
-        vars.energy[k] ==
-        vars.energy[k-1] + gain(k) - served(k) - decay(vars.energy[k-1])
+        vars.energy[k] == vars.energy[k-1] + gain(k) - served(k) - decay(vars.energy[k-1])
     )
     reserve = tank_reserve_kwh(tank)
     @constraint(model, [k = 1:n], vars.energy[k] >= reserve - vars.shortfall[k])
@@ -254,7 +247,8 @@ function cost_terms(model::Model, tank::WaterTank, ctx::DispatchContext, vars)
         # Unlike a car, a tank has no deadline the window can see past its own end, and unlike a
         # house its state is not pinned by a band. Without valuing what is left it arrives at every
         # window boundary at the reserve, so the next window has to reheat at whatever the price is.
-        lambda = median(ctx.inputs.price_buy) / cop(tank.cop_model, median(ctx.inputs.t_amb))
+        lambda =
+            median(ctx.inputs.price_buy) / cop(tank.cop_model, median(ctx.inputs.t_amb))
         add_to_expression!(expr, -lambda, vars.energy[ctx.grid.n])
     end
     return expr

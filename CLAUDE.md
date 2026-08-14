@@ -92,6 +92,12 @@ as an accounting error — which is exactly how the EV's first draft looked.
   the comfort band.
 - **The COP models clamp to `cop_min = 1.5` by default.** Fine for a heat pump, silently wrong for
   a resistive element — `LinearCOP(reference = 1.0, slope = 0.0)` gives a COP of 1.5, not 1.0.
+- **`degradation_cost` never reaches the bill.** It is in the dispatch objective, so it shapes how
+  hard the optimizer cycles storage, but `settle` knows nothing about it and `sweep`'s savings do
+  not pay for it. Wear belongs in `Investment` (`lifetime_years`, `capacity_fade`); charging it in
+  both places would double-count. The visible consequence is that `size_lp`, whose objective *does*
+  include it, under-sizes against `sweep` unless its template has it at zero — 3.14 kWh versus 5.12
+  on the same month.
 - **The comfort band is soft, and asymmetric.** Falling below it is discomfort and costs
   `comfort_penalty`; rising above it costs `overheat_penalty`, an order of magnitude less, because a
   house coasting down to a night setback is above the band and nobody minds. At parity the optimizer

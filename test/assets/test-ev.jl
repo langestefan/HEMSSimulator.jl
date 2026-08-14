@@ -242,3 +242,32 @@ end
         EVHome.contract,
     )
 end
+
+@testitem "V2G turns the car into a battery that drives away" tags = [:integration, :slow] setup =
+    [EVHome] begin
+    plain = EVHome.make_ev()
+    v2g = EVHome.make_ev(discharge_power_kw = 11.0, degradation_cost = 0.05)
+
+    @test !supports_v2g(plain)
+    @test supports_v2g(v2g)
+    @test !supports_binary(plain)
+    @test supports_binary(v2g)
+
+    without =
+        simulate(EVHome.home_with([plain]), EVHome.weather, EVHome.load, EVHome.contract)
+    with = simulate(EVHome.home_with([v2g]), EVHome.weather, EVHome.load, EVHome.contract)
+
+    # Without V2G the discharge variable exists but is pinned to zero.
+    @test all(iszero, without.frame.ev_discharge_kw)
+    @test sum(with.frame.ev_discharge_kw) > 0
+    # It can only feed the house while it is plugged in.
+    @test all(iszero, with.frame.ev_discharge_kw[.!v2g.connected])
+    # Every departure target is still met — the car is not drained into the house.
+    for k in eachindex(v2g.target_kwh)
+        v2g.target_kwh[k] > 0 || continue
+        @test with.frame.ev_soc_kwh[k] >= v2g.target_kwh[k] - 1e-6
+    end
+    @test maximum(abs, balance_residual(with)) < 1e-9
+    # A car that can discharge covers more of the household load than one that cannot.
+    @test self_sufficiency(with) > self_sufficiency(without)
+end

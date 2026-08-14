@@ -38,8 +38,7 @@ end
     @test tank_reserve_kwh(tank) ≈ 200 * WATER_KWH_PER_LITRE_K * 35
     @test initial_state(tank) ≈ 0.8 * tank_capacity_kwh(tank)
     # A bigger tank holds more; a hotter one holds more still.
-    @test tank_capacity_kwh(WaterTank(grid; volume_litre = 300.0)) >
-          tank_capacity_kwh(tank)
+    @test tank_capacity_kwh(WaterTank(grid; volume_litre = 300.0)) > tank_capacity_kwh(tank)
 
     @test_throws ArgumentError WaterTank(grid; volume_litre = 0.0)
     @test_throws ArgumentError WaterTank(grid; minimum_c = 70.0)
@@ -69,8 +68,8 @@ end
     run(assets) = simulate(home_with(assets), weather, load, contract)
 end
 
-@testitem "The tank stays hot and reheats when power is cheap" tags =
-    [:integration, :slow] setup = [TankHome] begin
+@testitem "The tank stays hot and reheats when power is cheap" tags = [:integration, :slow] setup =
+    [TankHome] begin
     using Statistics: mean
 
     tank = TankHome.make_tank()
@@ -100,11 +99,12 @@ end
     stored = result.frame.dhw_energy_kwh[end] - initial_state(tank)
 
     # Heat in must cover the draw, the change in store, and the standing loss on top.
-    heat_in = sum(
-        result.frame.dhw_kw[k] *
-        BatteryBusinessCase.cop(tank.cop_model, TankHome.weather.t_amb[k]) for
-        k = 1:TankHome.grid.n
-    ) * hours(TankHome.grid)
+    heat_in =
+        sum(
+            result.frame.dhw_kw[k] *
+            BatteryBusinessCase.cop(tank.cop_model, TankHome.weather.t_amb[k]) for
+            k = 1:TankHome.grid.n
+        ) * hours(TankHome.grid)
     @test heat_in > drawn + stored
     @test heat_in ≈ drawn + stored + (heat_in - drawn - stored)   # standing loss is the remainder
     losses = heat_in - drawn - stored
@@ -113,14 +113,12 @@ end
     @test 1.5 < heat_in / electric < 3.5
 end
 
-@testitem "A tank that cannot keep up says so" tags =
-    [:integration, :slow] setup = [TankHome] begin
+@testitem "A tank that cannot keep up says so" tags = [:integration, :slow] setup =
+    [TankHome] begin
     # It takes a lot to break a tank: 0.3 kW is only 18 kWh of heat a day, but a normal 120 L
     # household needs 7, and the store buffers the morning peak. Four hundred litres a day is more
     # than the element can make. A hard reserve would be infeasible; the soft one reports the kWh.
-    weak = TankHome.run([
-        TankHome.make_tank(max_power_kw = 0.3, litres_per_day = 400.0),
-    ])
+    weak = TankHome.run([TankHome.make_tank(max_power_kw = 0.3, litres_per_day = 400.0)])
 
     @test dhw_shortfall_kwh(weak) > 0.1
     # Not just lukewarm: the tank empties and some of the draw is simply not delivered.
@@ -135,8 +133,8 @@ end
     @test dhw_unserved_kwh(normal) < 1e-6
 end
 
-@testitem "A resistive tank is the same model with COP one" tags =
-    [:integration, :slow] setup = [TankHome] begin
+@testitem "A resistive tank is the same model with COP one" tags = [:integration, :slow] setup =
+    [TankHome] begin
     # `cop_min` matters here: the models clamp to 1.5 by default, which would make this "resistive"
     # tank a poor heat pump instead of an element.
     element = TankHome.make_tank(
@@ -173,8 +171,8 @@ end
     @test 0 <= self_consumption(result) <= 1
 end
 
-@testitem "A draw profile shorter than the run is caught" tags =
-    [:unit, :fast] setup = [TankHome] begin
+@testitem "A draw profile shorter than the run is caught" tags = [:unit, :fast] setup =
+    [TankHome] begin
     using Dates: DateTime
 
     short = WaterTank(TimeGrid(DateTime(2024, 1, 8), 96 * 2))

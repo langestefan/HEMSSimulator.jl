@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning].
   a soft minimum temperature and an explicit unserved-draw term, so an undersized element reports
   lukewarm and cold-shower kWh instead of an infeasible solve. The same type models a resistive
   immersion tank.
+- `size_lp`: battery capacity and power as continuous variables in one full-horizon LP, with a
+  `c_rate` tying the two, plus `capital_recovery_factor`. An idealised reference point for a sweep,
+  optimistic in three documented ways.
 - `SimulationInputs` carries `ghi`, since a building gains heat through its windows whether or not
   there are panels on the roof.
 
