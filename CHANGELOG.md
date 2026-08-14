@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning].
 - `SimulationInputs` carries `ghi`, since a building gains heat through its windows whether or not
   there are panels on the roof.
 
+- `sweep` runs its candidates on all available threads by default (`threaded` keyword), a 4.1x
+  speedup on eight candidates over a year.
+
 ### Changed
 
 - Default `energy_tax` is now the 2025 *energiebelasting* rate of 0.10154 €/kWh; it was the 2024

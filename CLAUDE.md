@@ -121,6 +121,27 @@ as an accounting error — which is exactly how the EV's first draft looked.
   interval midpoints; irradiance goes through the clearness index and conserves each source
   interval's energy exactly. DNI is always re-derived from GHI and DHI, never interpolated.
 
+## Performance
+
+Measured on a full synthetic year (35 040 intervals, 366 windows of 48 h):
+
+| System | Total | In HiGHS | Building the model |
+|---|--:|--:|--:|
+| PV + battery | 4.3 s | 1.7 s (40%) | 2.6 s |
+| PV + battery + EV + heat pump + DHW | 20.9 s | 14.0 s (67%) | 6.9 s |
+
+The original plan assumed model *construction* dominated and that reusing one model across windows
+via `MOI.Parameter` would be the first lever. That was true of the thin slice and is not true now:
+once the house has a realistic set of assets, two thirds of the time is inside the solver, so model
+reuse would attack a third of the cost for a large, invasive change to the asset contract. It has
+not been done, deliberately.
+
+What was done is threading the sweep, which attacks all of it: `sweep(...; threaded = true)`, the
+default when `Threads.nthreads() > 1`. Eight candidates over a year went from 30.7 s to 7.5 s, a
+4.1x speedup — bounded by the candidate count, not the core count, and with the baseline simulation
+still serial. Start Julia with `-t auto` or it does nothing. A test asserts the threaded and serial
+tables are identical.
+
 ## Data sources
 
 `ENTSOE.jl` is unregistered, so it is a hard dependency resolved through a `[sources]` **url** entry

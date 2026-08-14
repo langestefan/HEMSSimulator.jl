@@ -176,3 +176,41 @@ end
     @test plain.annual_savings[end] < 1.02 * plain.annual_savings[4]
     @test with_car.annual_savings[end] > 1.15 * with_car.annual_savings[4]
 end
+
+@testitem "Threading a sweep changes the wall clock, not the answer" tags =
+    [:integration, :slow] begin
+    using Dates: DateTime
+    using DataFrames: nrow
+
+    # Candidates are independent, so the only thing that can go wrong is a shared mutable. There is
+    # none: each candidate builds its own model and solver, and rows are written by index. This
+    # asserts that, and it is meaningful even on one thread because it also pins determinism.
+    site = Site(52.1, 5.18)
+    grid = TimeGrid(DateTime(2024, 4, 1), 96 * 14)
+    weather = synthetic_weather(grid, site; seed = 21)
+    load = synthetic_load(grid; annual_kwh = 3000)
+    prices = synthetic_prices(grid; seed = 23)
+    home = HomeSystem(
+        site = site,
+        pv = [
+            PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
+        ],
+    )
+    contract = Contract(
+        grid;
+        commodity = prices .+ 0.02,
+        feed_in = 0.04,
+        net_metering_fraction = 0.0,
+    )
+    candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:10.0]
+    investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh)
+
+    serial = sweep(home, weather, load, contract, candidates; investment, threaded = false)
+    parallel = sweep(home, weather, load, contract, candidates; investment, threaded = true)
+
+    @test nrow(serial) == nrow(parallel) == length(candidates)
+    @test serial.capacity_kwh == parallel.capacity_kwh
+    for column in (:annual_savings, :npv, :annual_bill, :cycles_per_year, :self_consumption)
+        @test serial[!, column] ≈ parallel[!, column]
+    end
+end

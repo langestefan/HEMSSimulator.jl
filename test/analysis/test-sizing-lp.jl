@@ -18,7 +18,9 @@ end
     prices = synthetic_prices(grid; seed = 23)
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
+        ],
     )
     contract(fraction) = Contract(
         grid;
@@ -26,17 +28,18 @@ end
         feed_in = 0.04,
         net_metering_fraction = fraction,
     )
-    candidates(deg) = [Battery(kwh, kwh / 2; degradation_cost = deg) for kwh in 2.5:2.5:20.0]
-    investment = b -> Investment(
-        capex = 1000 + 450 * b.capacity_kwh,
-        lifetime_years = 15,
-        discount_rate = 0.04,
-        capacity_fade = 0.0,
-    )
+    candidates(deg) = [Battery(kwh, kwh / 2; degradation_cost = deg) for kwh = 2.5:2.5:20.0]
+    investment =
+        b -> Investment(
+            capex = 1000 + 450 * b.capacity_kwh,
+            lifetime_years = 15,
+            discount_rate = 0.04,
+            capacity_fade = 0.0,
+        )
 end
 
-@testitem "The sizing LP brackets the sweep from above" tags =
-    [:integration, :slow] setup = [LPHome] begin
+@testitem "The sizing LP brackets the sweep from above" tags = [:integration, :slow] setup =
+    [LPHome] begin
     # Like for like means the LP's template must not charge a degradation cost, because that is a
     # control-shaping term that never reaches a bill and so never reaches the sweep's savings.
     contract = LPHome.contract(0.0)
@@ -82,8 +85,8 @@ end
     @test charged.capacity_kwh < 4.0 < free.capacity_kwh
 end
 
-@testitem "Full netting is where the LP shows its teeth" tags =
-    [:integration, :slow] setup = [LPHome] begin
+@testitem "Full netting is where the LP shows its teeth" tags = [:integration, :slow] setup =
+    [LPHome] begin
     # Under *salderen* an exported kWh is worth a retail kWh, tax and VAT included, so the spread
     # the optimizer sees is the retail spread — inflated by 21% VAT on top of a 10 ct/kWh levy.
     # With nothing charged for wear the LP will happily buy an absurd battery to arbitrage it. This
@@ -112,8 +115,8 @@ end
     @test 1.0 < plain.capacity_kwh < 10.0
 end
 
-@testitem "The sizing LP refuses to size around existing storage" tags =
-    [:unit, :fast] setup = [LPHome] begin
+@testitem "The sizing LP refuses to size around existing storage" tags = [:unit, :fast] setup =
+    [LPHome] begin
     occupied = with_assets(LPHome.home, [Battery(5.0, 2.5)])
     @test_throws ArgumentError size_lp(
         occupied,

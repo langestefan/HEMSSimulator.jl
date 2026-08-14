@@ -8,6 +8,10 @@ capacity a decision variable, so every candidate is evaluated under the real bil
 including annual netting, which no dispatch objective can represent. `investment` is a function from
 a [`Battery`](@ref) to an [`Investment`](@ref), since capex depends on the size being tested.
 
+Candidates are independent, so they are simulated on all available threads by default. Start Julia
+with `-t auto` for that to mean anything; with one thread `threaded` costs nothing and does nothing.
+See the note below on where the time actually goes.
+
 The baseline is `system` exactly as configured, simulated once; each candidate is that same home
 with the candidate **added** to its assets. So a home that already has an EV keeps it in both arms
 and the reported saving is what the battery adds on top, not what the battery and the car do
@@ -31,30 +35,54 @@ function sweep(
     candidates::AbstractVector{<:AbstractAsset};
     investment,
     options::RunOptions = RunOptions(),
+    threaded::Bool = Threads.nthreads() > 1,
 )
     baseline_result = simulate(system, inputs; options)
     baseline_bill = settle(baseline_result, contract)
 
     rows = Vector{NamedTuple}(undef, length(candidates))
-    for (index, candidate) in enumerate(candidates)
-        case_system = with_assets(system, vcat(system.assets, [candidate]))
-        result = simulate(case_system, inputs; options)
-        bill = settle(result, contract)
-        metrics = kpis(baseline_bill, bill, investment(candidate); result)
-        rows[index] = merge(
-            (;
-                capacity_kwh = candidate isa Battery ? candidate.capacity_kwh : NaN,
-                power_kw = candidate isa Battery ? candidate.discharge_power_kw : NaN,
-                capex = investment(candidate).capex,
-                annual_bill = annualise(bill),
-                imported_kwh = bill.imported_kwh,
-                exported_kwh = bill.exported_kwh,
-                netted_kwh = bill.netted_kwh,
-            ),
-            metrics,
+    evaluate(index) =
+        rows[index] = _sweep_row(
+            system,
+            inputs,
+            contract,
+            candidates[index],
+            baseline_bill,
+            investment,
+            options,
         )
+    if threaded
+        # Each candidate builds its own JuMP model and its own solver instance; `inputs` and the
+        # assets are immutable and only read. Results are written by index, so the table is
+        # identical however many threads ran it.
+        Threads.@threads for index in eachindex(candidates)
+            evaluate(index)
+        end
+    else
+        for index in eachindex(candidates)
+            evaluate(index)
+        end
     end
     return DataFrame(rows)
+end
+
+function _sweep_row(system, inputs, contract, candidate, baseline_bill, investment, options)
+    case_system = with_assets(system, vcat(system.assets, [candidate]))
+    result = simulate(case_system, inputs; options)
+    bill = settle(result, contract)
+    metrics = kpis(baseline_bill, bill, investment(candidate); result)
+    return merge(
+        (;
+            capacity_kwh = candidate isa Battery ? candidate.capacity_kwh : NaN,
+            power_kw = candidate isa Battery ? candidate.discharge_power_kw : NaN,
+            capex = investment(candidate).capex,
+            annual_bill = annualise(bill),
+            imported_kwh = bill.imported_kwh,
+            exported_kwh = bill.exported_kwh,
+            netted_kwh = bill.netted_kwh,
+        ),
+        metrics,
+    )
 end
 
 """
@@ -71,9 +99,10 @@ function sweep(
     candidates::AbstractVector{<:AbstractAsset};
     investment,
     options::RunOptions = RunOptions(),
+    threaded::Bool = Threads.nthreads() > 1,
 )
     inputs = prepare(system, weather, load_kw, contract; options)
-    return sweep(system, inputs, contract, candidates; investment, options)
+    return sweep(system, inputs, contract, candidates; investment, options, threaded)
 end
 
 """
@@ -117,6 +146,7 @@ function sweep(
     candidates::AbstractVector{<:AbstractAsset};
     investment,
     options::RunOptions = RunOptions(),
+    threaded::Bool = Threads.nthreads() > 1,
 )
     isempty(contracts) && throw(ArgumentError("no scenarios given"))
     frames = DataFrame[]
@@ -129,6 +159,7 @@ function sweep(
             candidates;
             investment,
             options,
+            threaded,
         )
         push!(frames, insertcols!(table, 1, :scenario => fill(name, nrow(table))))
     end
