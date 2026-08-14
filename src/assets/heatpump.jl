@@ -53,8 +53,7 @@ Coefficient of performance at an outdoor temperature of `t_amb` °C.
 function cop end
 
 cop(model::CarnotCOP, t_amb::Real) = clamp(
-    model.efficiency * (model.supply_temp + 273.15) /
-    max(model.supply_temp - t_amb, 1.0),
+    model.efficiency * (model.supply_temp + 273.15) / max(model.supply_temp - t_amb, 1.0),
     model.cop_min,
     model.cop_max,
 )
@@ -160,8 +159,7 @@ function HeatPump(grid::TimeGrid; setpoint = 20.0, kwargs...)
     return HeatPump(; setpoint = series, kwargs...)
 end
 
-initial_state(hp::HeatPump) =
-    fill(hp.initial_temperature, nstates(hp.building))
+initial_state(hp::HeatPump) = fill(hp.initial_temperature, nstates(hp.building))
 
 # The setpoint spans the horizon; a window sees the slice starting at ctx.offset.
 function _hp_setpoint(hp::HeatPump, ctx::DispatchContext)
@@ -251,16 +249,8 @@ function add_constraints!(model::Model, hp::HeatPump, ctx::DispatchContext, vars
         sum(Ad[i, j] * x[j, k-1] for j = 1:nx) + Bd[i, 2] * heat(k) + exogenous(i, k)
     )
 
-    @constraint(
-        model,
-        [k = 1:n],
-        x[1, k] >= vars.setpoint[k] - hp.band - vars.too_cold[k]
-    )
-    @constraint(
-        model,
-        [k = 1:n],
-        x[1, k] <= vars.setpoint[k] + hp.band + vars.too_warm[k]
-    )
+    @constraint(model, [k = 1:n], x[1, k] >= vars.setpoint[k] - hp.band - vars.too_cold[k])
+    @constraint(model, [k = 1:n], x[1, k] <= vars.setpoint[k] + hp.band + vars.too_warm[k])
 
     if hp.control === :thermostat
         profile = thermostat_profile(hp, state, vars.setpoint, t_amb, ghi, ctx.dt)
@@ -296,10 +286,7 @@ function result_columns(hp::HeatPump, vars, k::Integer)
     )
     hp.building.rc.emitter || return columns
     row = nstates(hp.building)
-    return merge(
-        columns,
-        (; emitter_temp = [value(vars.temperature[row, j]) for j = 1:k]),
-    )
+    return merge(columns, (; emitter_temp = [value(vars.temperature[row, j]) for j = 1:k]))
 end
 
 consumption_columns(::HeatPump) = [:heatpump_kw]
@@ -327,7 +314,6 @@ function discomfort_kh(result; side::Symbol = :both)
     dt = hours(result.grid)
     side === :cold && return sum(result.frame.too_cold_k) * dt
     side === :warm && return sum(result.frame.too_warm_k) * dt
-    side === :both ||
-        throw(ArgumentError("side must be :cold, :warm or :both, got :$side"))
+    side === :both || throw(ArgumentError("side must be :cold, :warm or :both, got :$side"))
     return (sum(result.frame.too_cold_k) + sum(result.frame.too_warm_k)) * dt
 end

@@ -46,7 +46,7 @@ ones above it.
 | `core/` | `TimeGrid` (the 15-min grid everything aligns to), `resample` (`StepHold`/`LinearInterp`), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
 | `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), clear-sky reference, `PVArray` and production, `upsample_irradiance` |
 | `building/` | The house as an RC thermal network: `BuildingSpec`, continuous-to-discrete state space |
-| `assets/` | Controllable assets. `battery.jl`, `ev.jl`, `heatpump.jl` today; DHW lands here |
+| `assets/` | Controllable assets: `battery.jl`, `ev.jl`, `heatpump.jl`, `dhw.jl` |
 | `market/` | `Contract` and grid tariffs, `NL_TARIFFS_2025`, the four `scenarios`, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
 | `analysis/` | The sizing sweep |
@@ -85,6 +85,13 @@ as an accounting error — which is exactly how the EV's first draft looked.
   `OPENMETEO_RADIATION_LAG` before resampling. This is verified empirically by a test that compares
   the irradiance-weighted centre of a recorded day against the clear-sky centre — not assumed.
   Open-Meteo also defaults wind to km/h; the loader asks for m/s.
+- **Every physical limit an exogenous input can push past needs a slack.** The tank's draw is not
+  optional data: an empty tank cannot deliver hot water, so a hard energy floor turns a heavy draw
+  into `INFEASIBLE`. `WaterTank` therefore has two slacks with different prices — `shortfall`
+  (delivered below the minimum temperature) and `unserved` (not delivered at all). Same lesson as
+  the comfort band.
+- **The COP models clamp to `cop_min = 1.5` by default.** Fine for a heat pump, silently wrong for
+  a resistive element — `LinearCOP(reference = 1.0, slope = 0.0)` gives a COP of 1.5, not 1.0.
 - **The comfort band is soft, and asymmetric.** Falling below it is discomfort and costs
   `comfort_penalty`; rising above it costs `overheat_penalty`, an order of magnitude less, because a
   house coasting down to a night setback is above the band and nobody minds. At parity the optimizer

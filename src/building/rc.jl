@@ -173,8 +173,7 @@ fast node. This is computed once per simulation; the result enters JuMP as const
 """
 function discretize(Ac::AbstractMatrix, Bc::AbstractMatrix, dt::Real)
     n, m = size(Bc)
-    size(Ac) == (n, n) ||
-        throw(DimensionMismatch("Ac is $(size(Ac)) but Bc has $n rows"))
+    size(Ac) == (n, n) || throw(DimensionMismatch("Ac is $(size(Ac)) but Bc has $n rows"))
     block = [Ac Bc; zeros(m, n + m)]
     expanded = exp(block * dt)
     return expanded[1:n, 1:n], expanded[1:n, (n+1):(n+m)]

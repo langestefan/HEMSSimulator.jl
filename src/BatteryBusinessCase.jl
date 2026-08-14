@@ -75,6 +75,7 @@ include("building/rc.jl")       # the house as a thermal network
 include("assets/battery.jl")    # the first controllable asset
 include("assets/ev.jl")         # a car: storage with a departure deadline
 include("assets/heatpump.jl")   # storage in the fabric of the building itself
+include("assets/dhw.jl")        # the smallest store, facing the sharpest price swing
 
 include("market/tariff.jl")     # contracts and network tariffs
 include("market/scenarios.jl")  # the four headline regulatory regimes
@@ -114,6 +115,8 @@ export AbstractAsset, Battery, ElectricVehicle, ev_schedule, ev_energy_kwh
 export RCSpec, BuildingSpec, heat_loss_coefficient
 export AbstractCOPModel, CarnotCOP, LinearCOP, HeatPump
 export thermostat_profile, heat_demand_kwh, discomfort_kh
+export WaterTank, dhw_draw, dhw_energy_kwh, dhw_shortfall_kwh, dhw_unserved_kwh
+export tank_capacity_kwh, tank_reserve_kwh, WATER_KWH_PER_LITRE_K
 export HomeSystem, RunOptions, SimulationInputs
 export prepare, with_assets, supports_binary, supports_v2g, initial_state
 export add_variables!,

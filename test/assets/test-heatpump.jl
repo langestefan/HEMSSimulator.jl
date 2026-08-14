@@ -41,8 +41,8 @@ end
     @test_throws ArgumentError HeatPump(grid; building, setpoint = fill(20.0, 10))
 end
 
-@testitem "The comfort band is held, and it is the flexibility" tags =
-    [:integration, :slow] setup = [WinterHome] begin
+@testitem "The comfort band is held, and it is the flexibility" tags = [:integration, :slow] setup =
+    [WinterHome] begin
     hp = WinterHome.make_hp()
     result = WinterHome.run(hp)
     indoor = result.frame.indoor_temp
@@ -56,8 +56,8 @@ end
     @test all(0 .<= result.frame.heatpump_kw .<= hp.max_power_kw + 1e-9)
 end
 
-@testitem "Optimising the temperature beats a thermostat" tags =
-    [:integration, :slow] setup = [WinterHome] begin
+@testitem "Optimising the temperature beats a thermostat" tags = [:integration, :slow] setup =
+    [WinterHome] begin
     # The headline claim of the heat pump model. Two effects, and they are separable: the optimizer
     # buys fewer kWh (it heats when the COP is better and does not overshoot the band), and it buys
     # them cheaper (it heats when electricity is cheap). Neither is available to a controller that
@@ -162,11 +162,13 @@ end
     @test 0 <= self_sufficiency(result) <= 1
     # The emitter is warmer than the room whenever heat is flowing into it.
     running = result.frame.heatpump_kw .> 1e-6
-    @test all(result.frame.emitter_temp[running] .>= result.frame.indoor_temp[running] .- 1e-6)
+    @test all(
+        result.frame.emitter_temp[running] .>= result.frame.indoor_temp[running] .- 1e-6,
+    )
 end
 
-@testitem "A setpoint shorter than the run is caught" tags =
-    [:unit, :fast] setup = [WinterHome] begin
+@testitem "A setpoint shorter than the run is caught" tags = [:unit, :fast] setup =
+    [WinterHome] begin
     using Dates: DateTime
 
     short = TimeGrid(DateTime(2024, 1, 8), 96 * 2)

@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning].
   band that reports degree-hours rather than failing to solve, and a `:thermostat` control mode to
   measure optimised control against. `BuildingSpec(floor_area; heat_loss_kw)` derives the
   parameters from headline figures.
+- `WaterTank`: a domestic hot water store with a draw profile from `dhw_draw`, standing loss,
+  a soft minimum temperature and an explicit unserved-draw term, so an undersized element reports
+  lukewarm and cold-shower kWh instead of an infeasible solve. The same type models a resistive
+  immersion tank.
 - `SimulationInputs` carries `ghi`, since a building gains heat through its windows whether or not
   there are panels on the roof.
 
