@@ -1,16 +1,4 @@
 """
-    clearsky_ghi(zenith) -> Float64
-
-Haurwitz clear-sky global horizontal irradiance, W/m². A one-parameter model — accurate enough to
-generate plausible test data, not accurate enough to size a real system against.
-"""
-function clearsky_ghi(zenith::Real)
-    cosz = cosd(zenith)
-    cosz <= COS_ZENITH_MIN && return 0.0
-    return 1098 * cosz * exp(-0.059 / cosz)
-end
-
-"""
     synthetic_weather(grid::TimeGrid, site::Site; seed = 1, clear_fraction = 0.34) -> Weather
 
 Generate a plausible Dutch weather year: clear-sky irradiance modulated by a daily cloudiness

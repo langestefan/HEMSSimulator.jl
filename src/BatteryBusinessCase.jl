@@ -31,9 +31,13 @@ forecast later means substituting the data sliced into each window, not restruct
 """
 module BatteryBusinessCase
 
+using CSV: CSV
 using DataFrames: DataFrame, DataFrameRow, nrow
-using Dates: Dates, Date, DateTime, Millisecond, Minute, dayofweek, dayofyear
+using Dates: Dates, Date, DateTime, Hour, Millisecond, Minute, Period, dayofweek, dayofyear
+using ENTSOE: ENTSOE
+using HTTP: HTTP
 using HiGHS: HiGHS
+using JSON: JSON
 using JuMP:
     JuMP,
     AffExpr,
@@ -50,16 +54,20 @@ using JuMP:
     value
 using Printf: @printf
 using Random: MersenneTwister
+using SHA: sha256
+using Scratch: Scratch
 using SolarPosition: Observer, solar_position
 using Statistics: median
 
 # Include order is significant: each directory only depends on the ones above it.
 include("core/timegrid.jl")     # the uniform 15-minute grid everything is aligned to
+include("core/resample.jl")     # putting a source series on that grid
 include("core/types.jl")        # asset contract, run options, dispatch context, constants
 
 include("solar/weather.jl")     # site, weather series, GHI decomposition
-include("solar/irradiance.jl")  # angle of incidence, transposition onto a tilted plane
+include("solar/irradiance.jl")  # angle of incidence, transposition, clear-sky reference
 include("solar/pv.jl")          # arrays, cell temperature, DC to AC with clipping
+include("solar/resample.jl")    # hourly to 15-minute irradiance through the clearness index
 
 include("assets/battery.jl")    # the first controllable asset
 
@@ -75,6 +83,10 @@ include("market/economics.jl")  # NPV, IRR, payback
 
 include("analysis/sizing.jl")   # the sizing sweep
 
+include("io/cache.jl")          # on-disk response cache, so a sweep downloads once
+include("io/openmeteo.jl")      # ERA5 reanalysis weather
+include("io/entsoe.jl")         # day-ahead wholesale prices
+include("io/csv.jl")            # measured inputs from a file
 include("io/synthetic.jl")      # generators so examples and tests need no data files
 
 include("core/show.jl")
@@ -106,6 +118,16 @@ export retail_price, export_price, dispatch_prices, Bill, settle, annualise
 
 # Economics and sizing
 export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year, sweep, best
+
+# Resampling
+export AbstractResampler, StepHold, LinearInterp
+export resample, source_step, upsample_irradiance
+
+# Data loaders
+export openmeteo_weather, openmeteo_url, openmeteo_parse, resample_weather
+export entsoe_prices, parse_entsoe_prices
+export read_inputs, validate_inputs, INPUT_COLUMNS
+export get_cache, set_cache, clear_cache!
 
 # Synthetic inputs
 export synthetic_weather, synthetic_load, synthetic_prices, clearsky_ghi

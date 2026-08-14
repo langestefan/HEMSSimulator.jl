@@ -146,3 +146,20 @@ function poa(
     sky = max(sky, 0.0)
     return (; beam, sky, ground, total = beam + sky + ground)
 end
+
+"""
+    clearsky_ghi(zenith) -> Float64
+
+Haurwitz clear-sky global horizontal irradiance, W/m², from the solar zenith angle in degrees. A
+one-parameter model: no aerosol, no water vapour, no altitude term.
+
+It is used as a *reference shape* rather than as a prediction. [`upsample_irradiance`](@ref) divides
+measured irradiance by it to isolate the effect of cloud, refines that on the finer grid, and
+multiplies back — so the model's absolute bias cancels and only its diurnal shape matters.
+[`synthetic_weather`](@ref) uses it the same way to generate plausible test data.
+"""
+function clearsky_ghi(zenith::Real)
+    cosz = cosd(zenith)
+    cosz <= COS_ZENITH_MIN && return 0.0
+    return 1098 * cosz * exp(-0.059 / cosz)
+end

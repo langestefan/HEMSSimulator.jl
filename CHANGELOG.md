@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning].
 - Synthetic weather, load and price generators so examples and tests run without external data.
 - Degeneracy detection for the cases where the linear program cannot represent reality (negative
   prices, equal buy and sell prices under full netting).
+- Measured inputs: ERA5 reanalysis weather from the Open-Meteo archive (`openmeteo_weather`),
+  day-ahead wholesale prices from ENTSO-E through ENTSOE.jl (`entsoe_prices`), and a validated CSV
+  schema (`read_inputs`, `validate_inputs`).
+- Resampling layer aligning any source series to the simulation grid: `StepHold` for prices,
+  `LinearInterp` for instantaneous samples, and `upsample_irradiance`, which refines hourly
+  irradiance through the clearness index and conserves each source interval's energy exactly.
+- On-disk response cache keyed by the request (`set_cache`, `get_cache`, `clear_cache!`), so a
+  sizing sweep downloads a year once and re-runs against unchanged inputs.
 
 <!-- Links -->
 

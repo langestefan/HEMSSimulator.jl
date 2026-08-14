@@ -15,7 +15,7 @@ answers in `.copier-answers.yml`). Minimum Julia is 1.12.
 
 Five layers, each testable alone. Data flows one way:
 
-```
+```text
 weather + prices + load
    → prepare      → SimulationInputs   exogenous series, computed once for the whole horizon
    → simulate     → SimulationResult   receding horizon: solve 48 h, keep 24 h, carry state
@@ -43,13 +43,13 @@ ones above it.
 
 | Directory | Holds |
 |---|---|
-| `core/` | `TimeGrid` (the 15-min grid everything aligns to), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
-| `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), `PVArray` and production |
+| `core/` | `TimeGrid` (the 15-min grid everything aligns to), `resample` (`StepHold`/`LinearInterp`), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
+| `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), clear-sky reference, `PVArray` and production, `upsample_irradiance` |
 | `assets/` | Controllable assets. `battery.jl` today; EV, heat pump and DHW land here |
 | `market/` | `Contract` and grid tariffs, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
 | `analysis/` | The sizing sweep |
-| `io/` | Synthetic generators today; CSV and KNMI loaders land here |
+| `io/` | Response cache, Open-Meteo and ENTSO-E loaders, CSV schema, synthetic generators |
 
 ### Adding an asset
 
@@ -72,6 +72,33 @@ into the single meter balance and `cost_terms` into the objective, so nothing el
   proxy for un-consumed PV once a battery can export grid-charged energy.
 - **Synthetic weather cloudiness is bimodal on purpose.** A constant clearness index puts Erbs
   permanently in its high-diffuse regime, giving an 85%-diffuse sky where array tilt barely matters.
+- **Open-Meteo stamps radiation at the *end* of its hour** (mean over the preceding hour) while
+  stamping temperature instantaneously, so radiation timestamps are shifted back by
+  `OPENMETEO_RADIATION_LAG` before resampling. This is verified empirically by a test that compares
+  the irradiance-weighted centre of a recorded day against the clear-sky centre — not assumed.
+  Open-Meteo also defaults wind to km/h; the loader asks for m/s.
+- **Resampling is chosen per quantity, never uniformly.** Prices are step-held (a quarter-hour in an
+  hourly-settled period cleared at that hour's price); temperature and wind are interpolated at
+  interval midpoints; irradiance goes through the clearness index and conserves each source
+  interval's energy exactly. DNI is always re-derived from GHI and DHI, never interpolated.
+
+## Data sources
+
+`ENTSOE.jl` is unregistered, so it is a hard dependency resolved through a `[sources]` **path**
+entry pointing at `../EuropeanPowerSystems/ENTSOE.jl`. A clone without that sibling checkout, CI
+included, will fail to resolve; switch the entry to a `{url = ...}` source once the package is
+registered.
+
+Loaders are split into a fetch half and a pure-data half (`openmeteo_parse` / `resample_weather`,
+`entsoe_xml` / `parse_entsoe_prices`) so the alignment logic is tested against committed fixtures in
+`test/fixtures/` with no network. Live tests carry the `:network` tag and `test/runtests.jl` filters
+them out; run them with
+
+```bash
+julia --project=test -e 'using TestItemRunner; TestItemRunner.run_tests("."; filter = ti -> :network in ti.tags)'
+```
+
+The ENTSO-E ones additionally need `ENV["ENTSOE_API_TOKEN"]`.
 
 ## Environment layout
 
