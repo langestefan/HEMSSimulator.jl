@@ -118,6 +118,29 @@ tax; transport is charged on *physical* flow and is never netted. So a time-of-u
 battery whether or not netting applies, while ending netting changes what an exported kWh is worth
 at all.
 
+## A bound before you sweep
+
+A sweep costs one full simulation per candidate, so it helps to know roughly where to look first.
+[`size_lp`](@ref) makes capacity and power continuous variables in a single linear program over the
+whole horizon:
+
+```@example tutorial
+size_lp(home, weather, load, without_netting; capex_per_kwh = 450.0, capex_fixed = 1000.0)
+```
+
+Treat that as a reference point, not an answer. It is optimistic in three specific ways: it has
+perfect foresight over the entire horizon rather than 48 hours, it optimizes the linear dispatch
+price rather than the bill — annual netting cannot be written into its objective, which is the whole
+reason [`settle`](@ref) exists — and it sizes continuously, while batteries come in fixed sizes.
+
+`c_rate` ties power to capacity at 0.5 by default, matching how the candidates below are built.
+Without it, and with power unpriced, the LP answers with a tiny very fast battery that nobody sells.
+
+One trap is worth stating plainly: leave the template's `degradation_cost` at zero when comparing
+against a sweep. It is a control-shaping term that appears in the dispatch objective but never in a
+[`Bill`](@ref), so charging it here and not there makes the LP under-size. Wear belongs in
+[`Investment`](@ref), and charging it twice would be the error.
+
 ## Sizing the battery
 
 Sizing is done by simulating each candidate rather than by making capacity a decision variable.
@@ -232,6 +255,127 @@ past a point there is no more PV surplus or price spread for extra capacity to c
 large shiftable load that keeps the marginal kWh of storage earning, so the savings keep climbing.
 Sizing for a household that is about to buy an EV, without modelling the EV, understates what the
 larger battery would do.
+
+## Heating the house
+
+A battery stores kWh. A house stores °C, in mass that is already there and paid for. That makes the
+heat pump the asset the receding horizon earns its keep on — but only if the model has somewhere to
+put the heat, which is what the RC network is for.
+
+```@example tutorial
+building = BuildingSpec(120.0; heat_loss_kw = 6.0)     # 120 m², 6 kW at ΔT = 30 K
+
+(
+    conductance_kw_per_k = heat_loss_coefficient(building),
+    envelope_capacity_kwh_per_k = building.C_e,
+)
+```
+
+[`BuildingSpec`](@ref) derives the resistances and capacities from two figures a homeowner actually
+has — floor area, and heat loss at the design outdoor temperature. Those are rules of thumb, not a
+fitted model; pass your own parameters to the keyword form if you have them.
+
+The flexibility is the comfort band. Inside `setpoint ± band` the optimizer may put the temperature
+wherever it likes, so it can warm the fabric through a cheap mild afternoon and coast through the
+evening peak:
+
+```@example tutorial
+heated(mode) = simulate(
+    HomeSystem(site = site, pv = home.pv, assets = [
+        HeatPump(grid; building, setpoint = 20.0, band = 1.0, max_power_kw = 4.0, control = mode),
+    ]),
+    weather, load, without_netting,
+)
+
+smart = heated(:optimized)
+dumb  = heated(:thermostat)
+
+cost(run) = sum(run.frame.heatpump_kw .* run.frame.price_buy) * hours(grid)
+(
+    thermostat = (kwh = round(heat_demand_kwh(dumb), digits = 1), eur = round(cost(dumb), digits = 2)),
+    optimized  = (kwh = round(heat_demand_kwh(smart), digits = 1), eur = round(cost(smart), digits = 2)),
+)
+```
+
+Over this March the optimizer buys about 8% fewer kWh and pays about 24% less for them. The two
+effects are separable and both real: it heats when the COP is better, and it heats when electricity
+is cheap. Neither is available to a controller that only knows the current indoor temperature.
+
+The thermostat also overshoots, because the emitter keeps giving off heat after it switches off —
+the lag the third RC node exists to represent:
+
+```@example tutorial
+(
+    thermostat_range = round.(extrema(dumb.frame.indoor_temp), digits = 2),
+    optimized_range  = round.(extrema(smart.frame.indoor_temp), digits = 2),
+)
+```
+
+The band is *soft*, and asymmetric. Falling below it is discomfort and is priced at
+`comfort_penalty`; rising above it costs an order of magnitude less, because a house coasting down
+to a night setback is above its band and nobody minds. [`discomfort_kh`](@ref) reports the two sides
+separately, and an undersized heat pump in a cold snap therefore returns a number of degree-hours
+rather than `INFEASIBLE`.
+
+A night setback is a change to the setpoint, not to the model:
+
+```@example tutorial
+setback = [(Dates.hour(t) >= 23 || Dates.hour(t) < 6) ? 17.0 : 20.0 for t in timestamps(grid)]
+night = simulate(
+    HomeSystem(site = site, pv = home.pv, assets = [
+        HeatPump(grid; building, setpoint = setback, band = 1.0, max_power_kw = 4.0),
+    ]),
+    weather, load, without_netting,
+)
+(
+    steady_kwh  = round(heat_demand_kwh(smart), digits = 1),
+    setback_kwh = round(heat_demand_kwh(night), digits = 1),
+    cold_degree_hours = round(discomfort_kh(night; side = :cold), digits = 3),
+)
+```
+
+## Hot water
+
+The tank is the smallest store in the house and the one with the least freedom: a few kWh, drawn
+twice a day at times set by human habit rather than by price. It earns its place because its heat is
+the most expensive in the building — reaching 60 °C instead of the 40 °C a radiator needs roughly
+halves the COP.
+
+```@example tutorial
+tank = WaterTank(grid; litres_per_day = 120.0)
+
+run = simulate(
+    HomeSystem(site = site, pv = home.pv, assets = [tank]),
+    weather, load, without_netting,
+)
+(
+    capacity_kwh = round(tank_capacity_kwh(tank), digits = 2),
+    drawn_kwh    = round(sum(tank.draw_kwh), digits = 1),
+    electric_kwh = round(dhw_energy_kwh(run), digits = 1),
+    shortfall_kwh = round(dhw_shortfall_kwh(run), digits = 3),
+)
+```
+
+The gap between the heat drawn and the electricity bought is the COP; the gap between heat *in* and
+heat drawn is standing loss. And as with the car, the flexibility shows up in what it pays:
+
+```@example tutorial
+using Statistics
+(
+    paid = round(sum(run.frame.dhw_kw .* run.frame.price_buy) / sum(run.frame.dhw_kw), digits = 4),
+    average_price = round(mean(run.frame.price_buy), digits = 4),
+)
+```
+
+[`dhw_draw`](@ref) builds the profile — two Gaussian peaks and a trickle — and you can pass your own
+series instead. The same type models a resistive immersion tank with
+`cop_model = LinearCOP(reference = 1.0, slope = 0.0, cop_min = 1.0)`; mind that `cop_min`, because
+the COP models clamp at 1.5 by default and would otherwise turn your element into a poor heat pump.
+
+Two failure modes are reported separately, because they are not equally bad.
+[`dhw_shortfall_kwh`](@ref) is water delivered below the minimum temperature — a lukewarm shower.
+[`dhw_unserved_kwh`](@ref) is water not delivered at all. Without that second term an empty tank
+would make the window infeasible rather than telling you the household went without.
 
 ## Things worth knowing
 
