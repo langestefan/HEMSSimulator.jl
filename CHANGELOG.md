@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning].
   departure, and optional V2G. `ev_schedule` expands a commuting pattern into the series it needs.
 - `consumption_columns` / `production_columns` on the asset contract, so the reporting layer
   reconstructs the meter balance from any asset's flows without knowing its type.
+- `HeatPump` and the RC building model behind it: `BuildingSpec` / `RCSpec` for the thermal
+  network, an exact zero-order-hold discretisation, `CarnotCOP` and `LinearCOP`, a soft comfort
+  band that reports degree-hours rather than failing to solve, and a `:thermostat` control mode to
+  measure optimised control against. `BuildingSpec(floor_area; heat_loss_kw)` derives the
+  parameters from headline figures.
+- `SimulationInputs` carries `ghi`, since a building gains heat through its windows whether or not
+  there are panels on the roof.
 
 ### Changed
 

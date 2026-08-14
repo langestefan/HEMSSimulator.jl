@@ -45,7 +45,8 @@ ones above it.
 |---|---|
 | `core/` | `TimeGrid` (the 15-min grid everything aligns to), `resample` (`StepHold`/`LinearInterp`), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
 | `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), clear-sky reference, `PVArray` and production, `upsample_irradiance` |
-| `assets/` | Controllable assets. `battery.jl` and `ev.jl` today; heat pump and DHW land here |
+| `building/` | The house as an RC thermal network: `BuildingSpec`, continuous-to-discrete state space |
+| `assets/` | Controllable assets. `battery.jl`, `ev.jl`, `heatpump.jl` today; DHW lands here |
 | `market/` | `Contract` and grid tariffs, `NL_TARIFFS_2025`, the four `scenarios`, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
 | `analysis/` | The sizing sweep |
@@ -84,6 +85,11 @@ as an accounting error — which is exactly how the EV's first draft looked.
   `OPENMETEO_RADIATION_LAG` before resampling. This is verified empirically by a test that compares
   the irradiance-weighted centre of a recorded day against the clear-sky centre — not assumed.
   Open-Meteo also defaults wind to km/h; the loader asks for m/s.
+- **The comfort band is soft, and asymmetric.** Falling below it is discomfort and costs
+  `comfort_penalty`; rising above it costs `overheat_penalty`, an order of magnitude less, because a
+  house coasting down to a night setback is above the band and nobody minds. At parity the optimizer
+  would rather be cold at 06:00 than pre-heat at 05:00, which is the wrong trade. A hard band would
+  also turn an undersized heat pump into `INFEASIBLE` instead of a number of degree-hours.
 - **Terminal value is for storage, not for a car.** `Battery` needs it or the receding horizon
   empties it every window. `ElectricVehicle` does not — its departure targets already anchor the
   trajectory — and crediting its stored charge made it profitable to fill 60 kWh whenever the price

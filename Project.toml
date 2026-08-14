@@ -15,6 +15,7 @@ HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -23,11 +24,7 @@ SolarPosition = "5b9d1343-a731-5a90-8730-7bf8d89bf3eb"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [sources]
-# ENTSOE.jl is not in the General registry yet, so the day-ahead price loader resolves straight
-# from git. A URL rather than a local path so that a fresh clone and CI can resolve without a
-# sibling checkout; drop the whole entry once the package is registered. To develop against a local
-# checkout instead, run `Pkg.develop(path = "../EuropeanPowerSystems/ENTSOE.jl")`.
-ENTSOE = {url = "https://github.com/langestefan/EntsoE.jl", rev = "code-review-fixes"}
+ENTSOE = {rev = "code-review-fixes", url = "https://github.com/langestefan/EntsoE.jl"}
 
 [compat]
 CSV = "0.10"
@@ -38,6 +35,7 @@ HTTP = "1"
 HiGHS = "1"
 JSON = "1"
 JuMP = "1"
+LinearAlgebra = "1"
 Printf = "1"
 Random = "1"
 SHA = "0.7, 1"

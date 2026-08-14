@@ -60,7 +60,11 @@ prices and the base load are computed once and reused for every candidate batter
   - `pv_kw::Vector{Float64}`: total AC PV production available, kW.
   - `load_kw::Vector{Float64}`: household base load, kW.
   - `price_buy::Vector{Float64}`, `price_sell::Vector{Float64}`: the dispatch price signal, €/kWh.
-  - `t_amb::Vector{Float64}`: ambient temperature, °C. Carried for the heat pump model.
+  - `t_amb::Vector{Float64}`: ambient temperature, °C. Drives the heat pump's COP and the
+    building's heat loss.
+  - `ghi::Vector{Float64}`: global horizontal irradiance, W/m². Carried separately from the PV
+    production it also produced, because the building gains heat through its windows whether or not
+    there are panels on the roof.
 """
 struct SimulationInputs
     grid::TimeGrid
@@ -69,6 +73,7 @@ struct SimulationInputs
     price_buy::Vector{Float64}
     price_sell::Vector{Float64}
     t_amb::Vector{Float64}
+    ghi::Vector{Float64}
 end
 
 """
@@ -96,6 +101,7 @@ function prepare(
         buy,
         sell,
         copy(weather.t_amb),
+        copy(weather.ghi),
     )
 end
 
@@ -109,6 +115,7 @@ function window(inputs::SimulationInputs, first::Integer, len::Integer)
         inputs.price_buy[rng],
         inputs.price_sell[rng],
         inputs.t_amb[rng],
+        inputs.ghi[rng],
     )
 end
 

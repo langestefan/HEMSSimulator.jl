@@ -32,7 +32,8 @@
     @test sum(varying.trip_kwh) ≈ 20.0 + 4 * 5.0
 
     # Driving at weekends too: the same ten hours, seven days.
-    everyday = ev_schedule(grid; departure_hour = 8, return_hour = 18, weekdays_only = false)
+    everyday =
+        ev_schedule(grid; departure_hour = 8, return_hour = 18, weekdays_only = false)
     @test count(!, everyday.connected) == 10 * 4 * 7
     @test count(>(0), everyday.target_soc) == 7
 end
@@ -112,8 +113,8 @@ end
     home_with(assets) = HomeSystem(site = site, pv = pv, assets = assets)
 end
 
-@testitem "The car is always full enough to leave" tags =
-    [:integration, :slow] setup = [EVHome] begin
+@testitem "The car is always full enough to leave" tags = [:integration, :slow] setup =
+    [EVHome] begin
     ev = EVHome.make_ev()
     result = simulate(EVHome.home_with([ev]), EVHome.weather, EVHome.load, EVHome.contract)
     soc = result.frame.ev_soc_kwh
@@ -159,8 +160,8 @@ end
     @test paid < 0.95 * available
 end
 
-@testitem "Terminal value belongs to storage, not to a car" tags =
-    [:integration, :slow] setup = [EVHome] begin
+@testitem "Terminal value belongs to storage, not to a car" tags = [:integration, :slow] setup =
+    [EVHome] begin
     # A home battery needs an end-of-window value or the receding horizon empties it. A car does
     # not: its departure targets already anchor the trajectory. Crediting its charge as well made
     # it profitable to fill 60 kWh whenever the price dipped, so without V2G the credit is off —
@@ -189,12 +190,7 @@ end
     v2g = EVHome.make_ev(discharge_power_kw = 11.0, degradation_cost = 0.05)
     @test supports_v2g(v2g)
     @test !supports_v2g(ev)
-    banked = simulate(
-        EVHome.home_with([v2g]),
-        EVHome.weather,
-        EVHome.load,
-        EVHome.contract,
-    )
+    banked = simulate(EVHome.home_with([v2g]), EVHome.weather, EVHome.load, EVHome.contract)
     @test banked.frame.ev_soc_kwh[end] > with.frame.ev_soc_kwh[end]
 end
 
@@ -215,12 +211,8 @@ end
         AbstractAsset[Battery(5.0, 2.5), EVHome.make_ev(), Battery(5.0, 2.5)],
     ]
     for assets in combinations
-        result = simulate(
-            EVHome.home_with(assets),
-            EVHome.weather,
-            EVHome.load,
-            EVHome.contract,
-        )
+        result =
+            simulate(EVHome.home_with(assets), EVHome.weather, EVHome.load, EVHome.contract)
         @test maximum(abs, balance_residual(result)) < 1e-9
         @test 0 <= self_consumption(result) <= 1
         @test 0 <= self_sufficiency(result) <= 1
@@ -237,8 +229,8 @@ end
     end
 end
 
-@testitem "A schedule shorter than the run is caught, not truncated" tags =
-    [:unit, :fast] setup = [EVHome] begin
+@testitem "A schedule shorter than the run is caught, not truncated" tags = [:unit, :fast] setup =
+    [EVHome] begin
     using Dates: DateTime
 
     short = TimeGrid(DateTime(2024, 4, 1), 96 * 2)

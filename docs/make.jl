@@ -70,6 +70,11 @@ makedocs(;
     sitename = "BatteryBusinessCase.jl",
     format = Documenter.HTML(;
         canonical = "https://langestefan.github.io/BatteryBusinessCase.jl",
+        # The reference page is one `@autodocs` block over the whole package, so it grows with the
+        # API and has already passed Documenter's 200 KiB default. Raised rather than split because
+        # a single searchable page is the point of a reference; revisit if it gets much past this.
+        size_threshold = 500 * 1024,
+        size_threshold_warn = 300 * 1024,
     ),
     pages = list_pages(),
 )

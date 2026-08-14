@@ -38,6 +38,7 @@ using ENTSOE: ENTSOE
 using HTTP: HTTP
 using HiGHS: HiGHS
 using JSON: JSON
+using LinearAlgebra: LinearAlgebra
 using JuMP:
     JuMP,
     AffExpr,
@@ -69,8 +70,11 @@ include("solar/irradiance.jl")  # angle of incidence, transposition, clear-sky r
 include("solar/pv.jl")          # arrays, cell temperature, DC to AC with clipping
 include("solar/resample.jl")    # hourly to 15-minute irradiance through the clearness index
 
+include("building/rc.jl")       # the house as a thermal network
+
 include("assets/battery.jl")    # the first controllable asset
 include("assets/ev.jl")         # a car: storage with a departure deadline
+include("assets/heatpump.jl")   # storage in the fabric of the building itself
 
 include("market/tariff.jl")     # contracts and network tariffs
 include("market/scenarios.jl")  # the four headline regulatory regimes
@@ -105,6 +109,11 @@ export production, annual_yield, solar_positions, observer
 
 # Assets and system
 export AbstractAsset, Battery, ElectricVehicle, ev_schedule, ev_energy_kwh
+# `continuous`, `discretize` and `nstates` stay unexported: too generic to put in a user's
+# namespace, and reachable as `BatteryBusinessCase.discretize` when needed.
+export RCSpec, BuildingSpec, heat_loss_coefficient
+export AbstractCOPModel, CarnotCOP, LinearCOP, HeatPump
+export thermostat_profile, heat_demand_kwh, discomfort_kh
 export HomeSystem, RunOptions, SimulationInputs
 export prepare, with_assets, supports_binary, supports_v2g, initial_state
 export add_variables!,
