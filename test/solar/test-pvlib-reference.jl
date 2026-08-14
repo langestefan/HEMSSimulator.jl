@@ -15,12 +15,60 @@
     const ALBEDO = 0.2
 
     const CONDITIONS = [
-        (name = "summer noon clear", zenith = 30.0, solar_azimuth = 180.0, dni = 850.0, dhi = 90.0, ghi = 826.2, dni_extra = 1321.0),
-        (name = "winter noon clear", zenith = 70.0, solar_azimuth = 180.0, dni = 700.0, dhi = 60.0, ghi = 299.4, dni_extra = 1413.0),
-        (name = "overcast", zenith = 45.0, solar_azimuth = 150.0, dni = 0.0, dhi = 250.0, ghi = 250.0, dni_extra = 1367.0),
-        (name = "hazy morning", zenith = 75.0, solar_azimuth = 110.0, dni = 300.0, dhi = 150.0, ghi = 227.6, dni_extra = 1390.0),
-        (name = "sun behind plane", zenith = 60.0, solar_azimuth = 0.0, dni = 600.0, dhi = 120.0, ghi = 420.0, dni_extra = 1367.0),
-        (name = "low sun west", zenith = 85.0, solar_azimuth = 275.0, dni = 450.0, dhi = 70.0, ghi = 109.2, dni_extra = 1367.0),
+        (
+            name = "summer noon clear",
+            zenith = 30.0,
+            solar_azimuth = 180.0,
+            dni = 850.0,
+            dhi = 90.0,
+            ghi = 826.2,
+            dni_extra = 1321.0,
+        ),
+        (
+            name = "winter noon clear",
+            zenith = 70.0,
+            solar_azimuth = 180.0,
+            dni = 700.0,
+            dhi = 60.0,
+            ghi = 299.4,
+            dni_extra = 1413.0,
+        ),
+        (
+            name = "overcast",
+            zenith = 45.0,
+            solar_azimuth = 150.0,
+            dni = 0.0,
+            dhi = 250.0,
+            ghi = 250.0,
+            dni_extra = 1367.0,
+        ),
+        (
+            name = "hazy morning",
+            zenith = 75.0,
+            solar_azimuth = 110.0,
+            dni = 300.0,
+            dhi = 150.0,
+            ghi = 227.6,
+            dni_extra = 1390.0,
+        ),
+        (
+            name = "sun behind plane",
+            zenith = 60.0,
+            solar_azimuth = 0.0,
+            dni = 600.0,
+            dhi = 120.0,
+            ghi = 420.0,
+            dni_extra = 1367.0,
+        ),
+        (
+            name = "low sun west",
+            zenith = 85.0,
+            solar_azimuth = 275.0,
+            dni = 450.0,
+            dhi = 70.0,
+            ghi = 109.2,
+            dni_extra = 1367.0,
+        ),
     ]
 
     const SURFACES = [
@@ -107,8 +155,7 @@
     )
 end
 
-@testitem "Transposition matches pvlib" tags = [:validation, :fast] setup =
-    [PvlibReference] begin
+@testitem "Transposition matches pvlib" tags = [:validation, :fast] setup = [PvlibReference] begin
     # Every other transposition test in this package checks an invariant — horizontal reproduces
     # GHI, nothing at night, tilting toward the sun gains. Invariants cannot catch a mistyped Perez
     # coefficient or a sign error in the circumsolar term, because a wrong model still satisfies

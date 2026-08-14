@@ -1,43 +1,77 @@
-@testitem "Sweep tabulates a business case per candidate" tags = [:integration, :slow] begin
+@testitem "A full year, end to end" tags = [:integration, :slow] begin
     using Dates: DateTime
     using DataFrames: nrow
 
+    # The milestone-1 acceptance criterion, and the only test that runs the horizon the package is
+    # actually for. A fortnight annualised can produce almost any optimum; a year cannot. It also
+    # carries the two physical sanity checks that need a whole year to mean anything, so the
+    # expensive baseline simulation is paid for once.
     site = Site(52.1, 5.18)
-    grid = TimeGrid(DateTime(2024, 4, 1), 96 * 14)
+    grid = TimeGrid(DateTime(2024, 1, 1), DateTime(2025, 1, 1))
     weather = synthetic_weather(grid, site; seed = 21)
     load = synthetic_load(grid; annual_kwh = 3500)
     prices = synthetic_prices(grid; seed = 23)
-    contract = Contract(
-        grid;
-        commodity = prices .+ 0.02,
-        feed_in = 0.04,
-        net_metering_fraction = 0.0,
-    )
     home = HomeSystem(
         site = site,
         pv = [
             PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
         ],
     )
+    contract = Contract(
+        grid;
+        commodity = prices .+ 0.02,
+        feed_in = 0.04,
+        net_metering_fraction = 0.0,
+    )
+    inputs = prepare(home, weather, load, contract)
 
-    candidates = [Battery(kwh, kwh / 2) for kwh in (2.5, 5.0, 10.0)]
+    @test length(grid) == 366 * 96      # 2024 is a leap year
+
+    # A Dutch home with PV and no storage self-consumes about 30% of what it generates. This is the
+    # cross-check the plan asked for: it is a property of the load shape against the solar day, and
+    # it falls out of the model rather than being fitted, so it is worth pinning.
+    baseline = simulate(home, inputs)
+    @test 0.20 < self_consumption(baseline) < 0.40
+    @test 0.20 < self_sufficiency(baseline) < 0.40
+    @test 3000 < produced_kwh(baseline) < 4000       # ~900 kWh/kWp from 4 kWp
+    @test consumed_kwh(baseline) ≈ 3500 rtol = 0.02
+    @test maximum(abs, balance_residual(baseline)) < 1e-9
+
+    candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:20.0]
     table = sweep(
         home,
-        weather,
-        load,
+        inputs,
         contract,
         candidates;
-        investment = b -> Investment(capex = 500 + 500 * b.capacity_kwh),
+        investment = b -> Investment(
+            capex = 1000 + 450 * b.capacity_kwh,
+            lifetime_years = 15,
+            discount_rate = 0.04,
+        ),
     )
 
-    @test nrow(table) == 3
-    @test table.capacity_kwh == [2.5, 5.0, 10.0]
-    # A bigger battery saves more but costs more; savings must be positive and monotone in size.
+    @test nrow(table) == length(candidates)
+    @test table.capacity_kwh == collect(2.5:2.5:20.0)
     @test all(table.annual_savings .> 0)
     @test issorted(table.annual_savings)
     @test all(0 .<= table.self_consumption .<= 1)
     @test all(0 .<= table.self_sufficiency .<= 1)
     @test all(table.cycles_per_year .> 0)
+
+    # Storage raises self-consumption sharply and then saturates, which is why NPV turns over.
+    @test table.self_consumption[1] > self_consumption(baseline)
+    @test issorted(table.self_consumption)
+
+    # The optimum is interior, so the candidate grid brackets it and `best` does not warn. An
+    # optimum on the boundary would mean the answer is "wider than anything tested".
+    optimum = argmax(table.npv)
+    @test 1 < optimum < nrow(table)
+    winner = best(table)
+    @test winner.capacity_kwh == table.capacity_kwh[optimum]
+    @test winner.npv > 0
+    @test 5 < winner.payback_years < 15
+    # Beyond the optimum the extra capacity costs more than it saves.
+    @test table.npv[end] < winner.npv
 end
 
 @testitem "Sizing optimum at the edge of the grid is flagged" tags = [:unit, :fast] begin

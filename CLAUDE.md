@@ -235,8 +235,22 @@ up simply by existing** — name it `test/<area>/test-*.jl` and fill it with:
   (bindings land in the testitem's scope).
 - `@testmodule Name begin ... end` — a real module, referenced as `Name.helper(...)`.
 
-Existing tags: `:unit`, `:fast`, `:integration`, `:slow`, `:validation`. Keep using these for the
+Existing tags: `:unit`, `:fast`, `:integration`, `:slow`, `:validation`, `:network`. Keep using these for the
 `filter` invocations above to stay useful.
+
+The two `:validation` suites are worth knowing about:
+
+- `test/solar/test-pvlib-reference.jl` pins 72 absolute values from pvlib-python 0.15.2 across all
+  three transposition models. Every other transposition test checks an invariant, which a mistyped
+  Perez coefficient would still satisfy. Regenerate with the script in the file's header comment.
+- `test-quality.jl` runs `JET.report_package` and asserts that no report is *located* in this
+  package's source. It returns about 100 reports in total, all of them inside DataFrames, CSV and
+  JuMP; asserting "no reports at all" would be a test of our dependencies' release notes.
+
+`test/analysis/test-sizing.jl` holds the one test that runs a full simulated year (35 136 intervals
+— 2024 is a leap year). It is the milestone-1 acceptance criterion: the NPV optimum must be interior
+to the candidate grid, and a home with PV and no storage must self-consume about 30% of what it
+generates. A fortnight annualised can produce almost any optimum; a year cannot.
 
 ## Documentation conventions
 

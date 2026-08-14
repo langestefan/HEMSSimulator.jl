@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning].
 - `sweep` runs its candidates on all available threads by default (`threaded` keyword), a 4.1x
   speedup on eight candidates over a year.
 
+- Validation suites: transposition against 72 pinned pvlib-python reference values, and a JET
+  analysis asserting no error path is located in this package's own source.
+
 ### Changed
 
 - Default `energy_tax` is now the 2025 *energiebelasting* rate of 0.10154 €/kWh; it was the 2024
