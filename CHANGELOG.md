@@ -91,4 +91,4 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/langestefan/HEMSSimulator.jl/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/langestefan/HEMSSimulator.jl/commits/main
