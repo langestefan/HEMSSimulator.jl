@@ -1,10 +1,16 @@
 ```@meta
-CurrentModule = BatteryBusinessCase
+CurrentModule = HEMSSimulator
 ```
 
-# BatteryBusinessCase
+# HEMSSimulator
 
-Documentation for [BatteryBusinessCase](https://github.com/langestefan/BatteryBusinessCase.jl).
+Documentation for [HEMSSimulator](https://github.com/langestefan/HEMSSimulator.jl), a home energy
+management system simulator for Dutch households.
+
+It dispatches a home's controllable assets — battery, electric vehicle, heat pump, hot water tank —
+at 15-minute resolution over a year and bills the result under Dutch rules, including annual netting
+(*salderen*). Start with the [tutorial](10-tutorial.md) for the headline application, sizing a home
+battery, or [Real data](20-data.md) to point it at measured weather and prices.
 
 ## Contributors
 

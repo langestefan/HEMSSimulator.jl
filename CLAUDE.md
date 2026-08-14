@@ -5,8 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A home energy management system simulator for Dutch households, built on JuMP. It dispatches a
-home's assets at 15-minute resolution over a year and answers one question: what battery size is
-worth buying, under a given tariff and regulatory scenario.
+home's controllable assets — battery, EV, heat pump, hot water tank — at 15-minute resolution over a
+year, and bills the result under Dutch rules. The headline application is what battery size is worth
+buying, under a given tariff and regulatory scenario.
+
+The package was called `BatteryBusinessCase` until the asset set outgrew the name; the UUID is
+unchanged.
 
 Scaffolded from [BestieTemplate.jl](https://github.com/JuliaBesties/BestieTemplate.jl) (copier
 answers in `.copier-answers.yml`). Minimum Julia is 1.12.
@@ -38,7 +42,7 @@ settlement per candidate battery so every candidate is judged under the real bil
 
 ### `src/` layout
 
-Include order in `src/BatteryBusinessCase.jl` is significant; each directory depends only on the
+Include order in `src/HEMSSimulator.jl` is significant; each directory depends only on the
 ones above it.
 
 | Directory | Holds |
@@ -179,7 +183,7 @@ projects = ["test", "docs"]
 ```
 
 `test/` and `docs/` are separate environments that share the root `Manifest.toml`, and each declares
-`[sources] BatteryBusinessCase = {path = ".."}`. Consequences:
+`[sources] HEMSSimulator = {path = ".."}`. Consequences:
 
 - Never `Pkg.develop` the package into `test`/`docs`; the path source already handles it.
 - Test-only or docs-only dependencies go in `test/Project.toml` / `docs/Project.toml`, not the root.
@@ -226,7 +230,7 @@ discovered by scanning the repo for macros, at any directory depth, so **a new t
 up simply by existing** — name it `test/<area>/test-*.jl` and fill it with:
 
 - `@testitem "name" tags=[...] setup=[...] begin ... end` — one isolated test module; the package is
-  auto-`using`ed inside, so refer to `BatteryBusinessCase.foo` directly.
+  auto-`using`ed inside, so refer to `HEMSSimulator.foo` directly.
 - `@testsnippet Name begin ... end` — code spliced into any testitem listing it in `setup=[...]`
   (bindings land in the testitem's scope).
 - `@testmodule Name begin ... end` — a real module, referenced as `Name.helper(...)`.

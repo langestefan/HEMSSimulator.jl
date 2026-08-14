@@ -11,7 +11,7 @@ job of this layer.
 ## Weather
 
 ```julia
-using BatteryBusinessCase, Dates
+using HEMSSimulator, Dates
 
 site = Site(52.1, 5.18)                                       # Utrecht
 grid = TimeGrid(DateTime(2023, 1, 1), DateTime(2024, 1, 1))   # a full year at 15 minutes
@@ -27,7 +27,7 @@ Two details in that response are easy to get wrong, so the package handles both 
 
 - **Radiation is stamped at the end of its hour.** Open-Meteo reports irradiance as the mean over
     the *preceding* hour, while temperature at the same stamp is instantaneous. Radiation
-    timestamps are therefore shifted back by [`BatteryBusinessCase.OPENMETEO_RADIATION_LAG`](@ref)
+    timestamps are therefore shifted back by [`HEMSSimulator.OPENMETEO_RADIATION_LAG`](@ref)
     before anything else happens. Skipping that step puts the modelled solar day an hour late,
     which quietly shifts every overlap between production and evening load.
 - **Wind is requested in m/s.** The API defaults to km/h, and a 3.6× error there shows up only as
@@ -80,12 +80,12 @@ full before anything is resampled, and a bad one raises a single error listing e
 Every download goes through an on-disk cache keyed by the request itself:
 
 ```julia
-BatteryBusinessCase.set_cache(; dir = "data/responses")   # keep the responses with the study
-BatteryBusinessCase.set_cache(; enabled = false)          # always hit the network
-BatteryBusinessCase.clear_cache!()
+HEMSSimulator.set_cache(; dir = "data/responses")   # keep the responses with the study
+HEMSSimulator.set_cache(; enabled = false)          # always hit the network
+HEMSSimulator.clear_cache!()
 ```
 
-The default location is a Julia scratch space, or `ENV["BBC_CACHE_DIR"]` if that is set.
+The default location is a Julia scratch space, or `ENV["HEMS_CACHE_DIR"]` if that is set.
 
 This matters beyond speed. A sizing sweep re-simulates the same year for every candidate battery,
 and ERA5 is revised as it is reanalysed — so without a cache the same script can quietly compare
@@ -108,7 +108,7 @@ clear-sky reference, interpolate that, and multiply back at each fine interval's
 position, then rescale so each source hour's energy is preserved exactly.
 
 ```@example data
-using BatteryBusinessCase, Dates, Statistics
+using HEMSSimulator, Dates, Statistics
 
 site = Site(52.1, 5.18)
 fine = TimeGrid(DateTime(2024, 6, 21), 96)

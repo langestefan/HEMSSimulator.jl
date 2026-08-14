@@ -1,5 +1,5 @@
 @testmodule OpenMeteoFixture begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using Dates: Date, DateTime
 
     const path = joinpath(@__DIR__, "..", "fixtures", "openmeteo-utrecht-2023-06-20.json")
@@ -16,7 +16,7 @@ end
     site = Site(52.1, 5.18)
     url = openmeteo_url(site, Date(2023, 6, 20), Date(2023, 6, 22))
 
-    @test startswith(url, BatteryBusinessCase.OPENMETEO_ARCHIVE_URL * "?")
+    @test startswith(url, HEMSSimulator.OPENMETEO_ARCHIVE_URL * "?")
     @test occursin("latitude=52.1", url)
     @test occursin("longitude=5.18", url)
     @test occursin("start_date=2023-06-20", url)
@@ -25,7 +25,7 @@ end
     # Open-Meteo defaults to km/h; a silent 3.6x error in wind speed would only show up as a
     # slightly cooler PV cell.
     @test occursin("wind_speed_unit=ms", url)
-    for variable in BatteryBusinessCase.OPENMETEO_HOURLY
+    for variable in HEMSSimulator.OPENMETEO_HOURLY
         @test occursin(variable, url)
     end
 
@@ -51,7 +51,7 @@ end
     @test length(hourly.times) == 72
     @test first(hourly.times) == DateTime(2023, 6, 20, 0)
     @test last(hourly.times) == DateTime(2023, 6, 22, 23)
-    @test BatteryBusinessCase.source_step(hourly.times) == Hour(1)
+    @test HEMSSimulator.source_step(hourly.times) == Hour(1)
     for column in (:ghi, :dni, :dhi, :t_amb, :wind)
         @test length(getproperty(hourly, column)) == 72
         @test all(isfinite, getproperty(hourly, column))
@@ -78,17 +78,15 @@ end
 
     function offset(lag)
         midpoints = hourly.times[day] .- lag .+ Minute(30)
-        zenith = BatteryBusinessCase.solar_position(
-            BatteryBusinessCase.observer(site),
-            midpoints,
-        ).zenith
-        clear = BatteryBusinessCase.clearsky_ghi.(zenith)
+        zenith =
+            HEMSSimulator.solar_position(HEMSSimulator.observer(site), midpoints).zenith
+        clear = HEMSSimulator.clearsky_ghi.(zenith)
         measured = hourly.ghi[day]
         return sum(measured .* minutes.(midpoints)) / sum(measured) -
                sum(clear .* minutes.(midpoints)) / sum(clear)
     end
 
-    @test abs(offset(BatteryBusinessCase.OPENMETEO_RADIATION_LAG)) < 15
+    @test abs(offset(HEMSSimulator.OPENMETEO_RADIATION_LAG)) < 15
     @test offset(Hour(0)) > 45
 end
 
@@ -118,8 +116,7 @@ end
     # noon instead would be testing the weather: on this day the sky dimmed after 12:00 UTC, so
     # the true maximum sits before noon and the reconstruction is right to put it there.
     peak = timestamp(grid, argmax(weather.ghi))
-    brightest =
-        hourly.times[argmax(hourly.ghi)] - BatteryBusinessCase.OPENMETEO_RADIATION_LAG
+    brightest = hourly.times[argmax(hourly.ghi)] - HEMSSimulator.OPENMETEO_RADIATION_LAG
     @test brightest <= peak < brightest + Hour(1)
     # It exceeds the hourly mean it came from, but not by a wild factor.
     @test maximum(hourly.ghi) <= maximum(weather.ghi) <= 1.3 * maximum(hourly.ghi)
@@ -173,7 +170,7 @@ end
     # check that matters for the closure equation: their three components agree with each other to
     # 0.1%, so ours must not drift from theirs.
     hourly = openmeteo_parse(
-        BatteryBusinessCase.openmeteo_fetch(
+        HEMSSimulator.openmeteo_fetch(
             openmeteo_url(site, Date(2023, 1, 1), Date(2024, 1, 1)),
         ),
     )

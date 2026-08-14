@@ -1,5 +1,5 @@
 @testitem "RC networks have the nodes they were asked for" tags = [:unit, :fast] begin
-    const B = BatteryBusinessCase
+    const B = HEMSSimulator
 
     full = BuildingSpec(120.0)
     @test B.nstates(full) == 3
@@ -25,7 +25,7 @@ end
 
 @testitem "Discretisation is stable and preserves the physics" tags = [:unit, :fast] begin
     using LinearAlgebra: I, eigvals
-    const B = BatteryBusinessCase
+    const B = HEMSSimulator
 
     spec = BuildingSpec(120.0; heat_loss_kw = 6.0)
     Ad, Bd = B.discretize(spec, 0.25)
@@ -82,7 +82,7 @@ end
 end
 
 @testitem "COP falls as it gets colder, which is the whole problem" tags = [:unit, :fast] begin
-    const B = BatteryBusinessCase
+    const B = HEMSSimulator
 
     for model in (CarnotCOP(), LinearCOP())
         temperatures = -15.0:1.0:25.0

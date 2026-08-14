@@ -1,4 +1,4 @@
-name = "BatteryBusinessCase"
+name = "HEMSSimulator"
 uuid = "6d0dd5a4-2aa3-5676-9f1e-209ad3a36858"
 version = "0.1.0"
 authors = ["Stefan de Lange <langestefan@msn.com>"]

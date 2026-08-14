@@ -27,7 +27,7 @@ end
 end
 
 @testmodule BillFixtures begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using DataFrames: DataFrame
     using Dates: DateTime
 

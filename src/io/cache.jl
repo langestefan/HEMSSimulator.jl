@@ -11,7 +11,7 @@ script.
 
 # Fields
 
-  - `dir::String`: directory holding the cached response bodies. Defaults to `ENV["BBC_CACHE_DIR"]`
+  - `dir::String`: directory holding the cached response bodies. Defaults to `ENV["HEMS_CACHE_DIR"]`
     if set, otherwise a Julia scratch space that the depot garbage-collects with the package.
   - `enabled::Bool`: when `false`, every request goes to the network and nothing is written.
 """
@@ -23,7 +23,7 @@ end
 const _CACHE = Ref{Union{Nothing,CacheConfig}}(nothing)
 
 function _default_cache_dir()
-    dir = get(ENV, "BBC_CACHE_DIR", "")
+    dir = get(ENV, "HEMS_CACHE_DIR", "")
     return isempty(dir) ? Scratch.get_scratch!(@__MODULE__, "responses") : dir
 end
 
@@ -46,8 +46,8 @@ end
 Update the response cache. Keywords left as `nothing` keep their current value.
 
 ```julia
-BatteryBusinessCase.set_cache(; dir = "data/responses")   # commit the responses with the study
-BatteryBusinessCase.set_cache(; enabled = false)          # always hit the network
+HEMSSimulator.set_cache(; dir = "data/responses")   # commit the responses with the study
+HEMSSimulator.set_cache(; enabled = false)          # always hit the network
 ```
 """
 function set_cache(;

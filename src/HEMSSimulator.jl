@@ -1,11 +1,12 @@
 """
-    BatteryBusinessCase
+    HEMSSimulator
 
 A home energy management system simulator for Dutch households, built on JuMP.
 
-The package answers one question well: **what battery is worth buying**. It dispatches a home's
-assets at 15-minute resolution over a year, bills the result the way a Dutch supplier would, and
-tabulates the business case across candidate battery sizes.
+It dispatches a home's controllable assets — battery, electric vehicle, heat pump, hot water tank —
+at 15-minute resolution over a year, and bills the result the way a Dutch supplier would. The
+headline application is **what battery is worth buying**, under a given tariff and regulatory
+scenario, but the dispatch and settlement layers stand on their own.
 
 # How it fits together
 
@@ -29,7 +30,7 @@ investment variable, so every candidate is judged under the real billing rules.
 The rolling horizon exists from the first version so that replacing perfect foresight with a
 forecast later means substituting the data sliced into each window, not restructuring the model.
 """
-module BatteryBusinessCase
+module HEMSSimulator
 
 using CSV: CSV
 using DataFrames: DataFrame, DataFrameRow, insertcols!, nrow
@@ -112,7 +113,7 @@ export production, annual_yield, solar_positions, observer
 # Assets and system
 export AbstractAsset, Battery, ElectricVehicle, ev_schedule, ev_energy_kwh
 # `continuous`, `discretize` and `nstates` stay unexported: too generic to put in a user's
-# namespace, and reachable as `BatteryBusinessCase.discretize` when needed.
+# namespace, and reachable as `HEMSSimulator.discretize` when needed.
 export RCSpec, BuildingSpec, heat_loss_coefficient
 export AbstractCOPModel, CarnotCOP, LinearCOP, HeatPump
 export thermostat_profile, heat_demand_kwh, discomfort_kh

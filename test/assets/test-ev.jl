@@ -88,7 +88,7 @@ end
 end
 
 @testmodule EVHome begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using Dates: DateTime
 
     site = Site(52.1, 5.18)

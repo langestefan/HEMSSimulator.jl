@@ -1,4 +1,4 @@
-using BatteryBusinessCase
+using HEMSSimulator
 using TestItemRunner
 
 # `:network` test items hit Open-Meteo and ENTSO-E for real. They are excluded here so the suite

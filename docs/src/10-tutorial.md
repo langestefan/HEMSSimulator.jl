@@ -9,7 +9,7 @@ can execute it without any data files.
 A home is a location, some PV arrays, and whatever the optimizer controls.
 
 ```@example tutorial
-using BatteryBusinessCase
+using HEMSSimulator
 using Dates
 
 site = Site(52.1, 5.18)                     # Utrecht

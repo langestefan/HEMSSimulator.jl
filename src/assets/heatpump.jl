@@ -108,7 +108,7 @@ julia> grid = TimeGrid(DateTime(2024, 1, 1), 96);
 
 julia> hp = HeatPump(grid; building = BuildingSpec(120.0), setpoint = 20.0);
 
-julia> round(BatteryBusinessCase.cop(hp.cop_model, 7.0), digits = 2)
+julia> round(HEMSSimulator.cop(hp.cop_model, 7.0), digits = 2)
 4.27
 ```
 """

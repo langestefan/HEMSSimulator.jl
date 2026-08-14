@@ -1,5 +1,5 @@
 @testmodule ENTSOEFixture begin
-    using BatteryBusinessCase
+    using HEMSSimulator
 
     const path = joinpath(@__DIR__, "..", "fixtures", "entsoe-day-ahead-nl-2024-09-01.xml")
 
@@ -16,7 +16,7 @@ end
     @test length(prices.times) == 24
     @test first(prices.times) == DateTime(2024, 9, 1, 22)
     @test last(prices.times) == DateTime(2024, 9, 2, 21)
-    @test BatteryBusinessCase.source_step(prices.times) == Hour(1)
+    @test HEMSSimulator.source_step(prices.times) == Hour(1)
     # ENTSO-E publishes EUR/MWh; every price in this package is EUR/kWh, so a wholesale price is
     # cents, not tens of euros. Getting the factor wrong is a 1000x error that still "runs".
     @test all(0.0 .< prices.prices .< 1.0)
@@ -52,7 +52,7 @@ end
         DateTime(2024, 9, 1, 2),
     ]
     value = [20.0, 10.0, 10.0, 30.0]
-    unique = BatteryBusinessCase._sorted_unique(time, value)
+    unique = HEMSSimulator._sorted_unique(time, value)
     @test unique.times == [DateTime(2024, 9, 1, h) for h = 0:2]
     @test unique.prices == [10.0, 20.0, 30.0]
 end

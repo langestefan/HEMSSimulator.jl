@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 
+- Renamed from `BatteryBusinessCase` to `HEMSSimulator`, keeping the same UUID: the package
+  simulates a whole home, and battery sizing is one application of it.
 - Home energy management simulator on JuMP: 15-minute resolution, receding horizon (48 h window,
   24 h step) with perfect foresight inside each window.
 - PV modelling from GHI/DNI/DHI: solar geometry via SolarPosition.jl, Erbs decomposition,
@@ -86,4 +88,4 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/langestefan/BatteryBusinessCase.jl/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/langestefan/HEMSSimulator.jl/compare/v0.1.0...HEAD

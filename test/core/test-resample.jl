@@ -79,6 +79,6 @@ end
 
     times = collect(DateTime(2024, 1, 1):Hour(1):DateTime(2024, 1, 1, 3))
     grid = TimeGrid(DateTime(2024, 1, 1), 12)
-    groups = BatteryBusinessCase.group_indices(times, Millisecond(Hour(1)), grid)
+    groups = HEMSSimulator.group_indices(times, Millisecond(Hour(1)), grid)
     @test groups == repeat(1:3; inner = 4)
 end

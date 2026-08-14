@@ -1,12 +1,7 @@
-using BatteryBusinessCase
+using HEMSSimulator
 using Documenter
 
-DocMeta.setdocmeta!(
-    BatteryBusinessCase,
-    :DocTestSetup,
-    :(using BatteryBusinessCase);
-    recursive = true,
-)
+DocMeta.setdocmeta!(HEMSSimulator, :DocTestSetup, :(using HEMSSimulator); recursive = true)
 
 # Add titles of sections and overrides page titles
 const titles = Dict(
@@ -64,12 +59,12 @@ function list_pages()
 end
 
 makedocs(;
-    modules = [BatteryBusinessCase],
+    modules = [HEMSSimulator],
     authors = "Stefan de Lange <langestefan@msn.com>",
-    repo = "https://github.com/langestefan/BatteryBusinessCase.jl/blob/{commit}{path}#{line}",
-    sitename = "BatteryBusinessCase.jl",
+    repo = "https://github.com/langestefan/HEMSSimulator.jl/blob/{commit}{path}#{line}",
+    sitename = "HEMSSimulator.jl",
     format = Documenter.HTML(;
-        canonical = "https://langestefan.github.io/BatteryBusinessCase.jl",
+        canonical = "https://langestefan.github.io/HEMSSimulator.jl",
         # The reference page is one `@autodocs` block over the whole package, so it grows with the
         # API and has already passed Documenter's 200 KiB default. Raised rather than split because
         # a single searchable page is the point of a reference; revisit if it gets much past this.
@@ -79,4 +74,4 @@ makedocs(;
     pages = list_pages(),
 )
 
-deploydocs(; repo = "github.com/langestefan/BatteryBusinessCase.jl")
+deploydocs(; repo = "github.com/langestefan/HEMSSimulator.jl")

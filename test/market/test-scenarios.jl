@@ -34,7 +34,7 @@ end
     @test tariff isa TimeVaryingGridTariff
     @test sort(unique(tariff.import_eur_per_kwh)) == [0.02, 0.07]
     @test sort(unique(tariff.export_eur_per_kwh)) == [0.0, 0.01]
-    @test BatteryBusinessCase.fixed_grid_cost(tariff) == 150.0
+    @test HEMSSimulator.fixed_grid_cost(tariff) == 150.0
 
     peak = peak_intervals(grid)
     @test all(tariff.import_eur_per_kwh[peak] .== 0.07)

@@ -45,9 +45,9 @@ jobs:
         run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
-            using BatteryBusinessCase
-            DocMeta.setdocmeta!(BatteryBusinessCase, :DocTestSetup, :(using BatteryBusinessCase); recursive=true)
-            doctest(BatteryBusinessCase)'
+            using HEMSSimulator
+            DocMeta.setdocmeta!(HEMSSimulator, :DocTestSetup, :(using HEMSSimulator); recursive=true)
+            doctest(HEMSSimulator)'
       - name: Generate and deploy documentation
         run: julia --project=docs docs/make.jl
         env:

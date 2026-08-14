@@ -47,7 +47,7 @@ end
 end
 
 @testmodule TankHome begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using Dates: DateTime
 
     site = Site(52.1, 5.18)
@@ -102,7 +102,7 @@ end
     heat_in =
         sum(
             result.frame.dhw_kw[k] *
-            BatteryBusinessCase.cop(tank.cop_model, TankHome.weather.t_amb[k]) for
+            HEMSSimulator.cop(tank.cop_model, TankHome.weather.t_amb[k]) for
             k = 1:TankHome.grid.n
         ) * hours(TankHome.grid)
     @test heat_in > drawn + stored

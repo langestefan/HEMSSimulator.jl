@@ -1,5 +1,5 @@
 @testmodule CsvFixture begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using CSV: CSV
     using DataFrames: DataFrame
     using Dates: DateTime, Hour

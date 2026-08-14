@@ -1,5 +1,5 @@
 @testmodule HourlySky begin
-    using BatteryBusinessCase
+    using HEMSSimulator
     using Dates: DateTime, Hour
     using Statistics: mean
 
@@ -42,7 +42,7 @@ end
     src = HourlySky.hourly_from_fine(DateTime(2024, 4, 10), 2)
     site = HourlySky.site
     grid = TimeGrid(DateTime(2024, 4, 10), 96)
-    positions = BatteryBusinessCase.solar_positions(site, grid)
+    positions = HEMSSimulator.solar_positions(site, grid)
 
     up = upsample_irradiance(site, grid, src.times, src.ghi; dhi = src.dhi)
 
