@@ -8,7 +8,10 @@ capacity a decision variable, so every candidate is evaluated under the real bil
 including annual netting, which no dispatch objective can represent. `investment` is a function from
 a [`Battery`](@ref) to an [`Investment`](@ref), since capex depends on the size being tested.
 
-The no-battery baseline is simulated once and every candidate is measured against it.
+The baseline is `system` exactly as configured, simulated once; each candidate is that same home
+with the candidate **added** to its assets. So a home that already has an EV keeps it in both arms
+and the reported saving is what the battery adds on top, not what the battery and the car do
+together. Pass a system with no assets for the plain no-battery baseline.
 
 Returns one row per candidate with the candidate's size, its bill, and its KPIs. An optimum sitting
 at the edge of `candidates` means the grid was too narrow — widen it and rerun.
@@ -29,13 +32,12 @@ function sweep(
     investment,
     options::RunOptions = RunOptions(),
 )
-    baseline_system = with_assets(system, AbstractAsset[])
-    baseline_result = simulate(baseline_system, inputs; options)
+    baseline_result = simulate(system, inputs; options)
     baseline_bill = settle(baseline_result, contract)
 
     rows = Vector{NamedTuple}(undef, length(candidates))
     for (index, candidate) in enumerate(candidates)
-        case_system = with_assets(system, [candidate])
+        case_system = with_assets(system, vcat(system.assets, [candidate]))
         result = simulate(case_system, inputs; options)
         bill = settle(result, contract)
         metrics = kpis(baseline_bill, bill, investment(candidate); result)

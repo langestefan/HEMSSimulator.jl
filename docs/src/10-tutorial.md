@@ -177,6 +177,62 @@ select(best_by_scenario(across), :scenario, :capacity_kwh, :annual_savings, :pay
 That table is the deliverable. What a battery is worth is not one number but four, and on the
 package's own synthetic data they differ by more than any single modelling assumption in it.
 
+## Adding a car
+
+An EV is not a second battery. It is away when the sun is up on exactly the days its owner commutes,
+it must be full enough to leave in the morning, and unless V2G is switched on the energy that goes
+into it never comes back out to the house.
+
+```@example tutorial
+ev = ElectricVehicle(
+    grid;
+    capacity_kwh = 60.0,
+    charge_power_kw = 11.0,
+    km_per_day = 45,          # or kwh_per_day, or a function of the Date
+    departure_hour = 7.5,
+    return_hour = 17.5,
+    target_soc = 0.8,         # required before each departure
+)
+
+with_car = HomeSystem(site = site, pv = home.pv, assets = [ev])
+run = simulate(with_car, weather, load, without_netting)
+
+(
+    driven_kwh = round(sum(ev.trip_kwh), digits = 1),
+    charged_kwh = round(ev_energy_kwh(run), digits = 1),
+)
+```
+
+The charging is flexible; the departure is not. That is the whole reason to model a car rather than
+adding its consumption to the base load — the optimizer moves the charging to the cheap hours, but
+only within the window before each deadline.
+
+```@example tutorial
+using Statistics
+paid = sum(run.frame.ev_charge_kw .* run.frame.price_buy) / sum(run.frame.ev_charge_kw)
+(paid = round(paid, digits = 4), if_unmanaged = round(mean(run.frame.price_buy[ev.connected]), digits = 4))
+```
+
+Sizing a battery for this home keeps the car in both arms of the comparison, so what is reported is
+what the battery adds on top of a car that was already shifting its own load:
+
+```@example tutorial
+select(
+    sweep(
+        with_car, weather, load, without_netting,
+        [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in 2.5:2.5:15.0];
+        investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh),
+    ),
+    :capacity_kwh, :annual_savings, :npv,
+)
+```
+
+Compare that column of savings against the one without a car. On its own a battery saturates —
+past a point there is no more PV surplus or price spread for extra capacity to capture. The car is a
+large shiftable load that keeps the marginal kWh of storage earning, so the savings keep climbing.
+Sizing for a household that is about to buy an EV, without modelling the EV, understates what the
+larger battery would do.
+
 ## Things worth knowing
 
 **Negative prices break the linear program.** The LP avoids charging and discharging at once only

@@ -129,3 +129,50 @@ end
     @test savings[:no_netting_variable] == maximum(values(savings))
     @test savings[:netting_fixed] == minimum(values(savings))
 end
+
+@testitem "An EV removes the saturation that caps battery size" tags = [:integration, :slow] begin
+    using Dates: DateTime
+
+    # Without other flexible load a home battery runs out of work: past a point there is no more
+    # PV surplus or price spread left for extra capacity to capture, and annual savings flatten.
+    # A car is a large, shiftable load, and it keeps the marginal kWh of storage earning. That is
+    # why sizing a battery for a household that will buy an EV, without modelling the EV, is the
+    # optimistic mistake — it understates what the larger battery would do.
+    site = Site(52.1, 5.18)
+    grid = TimeGrid(DateTime(2024, 4, 1), 96 * 14)
+    weather = synthetic_weather(grid, site; seed = 21)
+    load = synthetic_load(grid; annual_kwh = 3000)
+    prices = synthetic_prices(grid; seed = 23)
+    pv = [PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180)]
+    contract = Contract(
+        grid;
+        commodity = prices .+ 0.02,
+        feed_in = 0.04,
+        net_metering_fraction = 0.0,
+    )
+    candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:15.0]
+    investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh)
+
+    plain = sweep(
+        HomeSystem(site = site, pv = pv),
+        weather,
+        load,
+        contract,
+        candidates;
+        investment,
+    )
+    ev = ElectricVehicle(grid; capacity_kwh = 60.0, charge_power_kw = 11.0, km_per_day = 45)
+    with_car = sweep(
+        HomeSystem(site = site, pv = pv, assets = [ev]),
+        weather,
+        load,
+        contract,
+        candidates;
+        investment,
+    )
+
+    # Same candidates, and the sweep keeps the car in both arms, so these are like for like.
+    @test with_car.capacity_kwh == plain.capacity_kwh
+    @test plain.annual_savings[end] < 1.02 * plain.annual_savings[4]
+    @test with_car.annual_savings[end] > 1.15 * with_car.annual_savings[4]
+end

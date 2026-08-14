@@ -44,6 +44,9 @@ function simulate(
         export_kw = zeros(grid.n),
     )
     asset_columns = Dict{Symbol,Vector{Float64}}()
+    # Which frame column each asset's declared column name ended up in, so the reporting layer can
+    # find an asset's flows without knowing its type. Stable after the first window.
+    column_names = [Dict{Symbol,Symbol}() for _ in system.assets]
 
     states = [initial_state(asset) for asset in system.assets]
     first_interval = 1
@@ -70,7 +73,14 @@ function simulate(
         frame.curtail_kw[rows] .= value.(vars.curtail[1:implemented])
         for (index, (asset, avars)) in enumerate(zip(system.assets, vars.assets))
             for (name, values) in pairs(result_columns(asset, avars, implemented))
-                column = unique_column(asset_columns, name, index)
+                # Resolved once, on this asset's first window. Recomputing it every window would
+                # move an asset to a suffixed column the moment the unsuffixed one exists — which
+                # it does, because the asset itself created it on the previous pass.
+                column = get!(
+                    () -> unique_column(asset_columns, name, index),
+                    column_names[index],
+                    name,
+                )
                 get!(asset_columns, column, zeros(grid.n))[rows] .= values
             end
         end
@@ -85,11 +95,12 @@ function simulate(
     for (name, values) in asset_columns
         frame[!, name] = values
     end
-    return SimulationResult(grid, frame, system, windows, solve_time)
+    return SimulationResult(grid, frame, system, windows, solve_time, column_names)
 end
 
 # Two assets of the same type would otherwise write to the same column. Suffix by asset index so the
-# frame stays unambiguous rather than silently keeping the last writer.
+# frame stays unambiguous rather than silently keeping the last writer. Call this once per asset per
+# column name — the answer depends on what has been claimed already, so it is not idempotent.
 function unique_column(columns::Dict{Symbol,Vector{Float64}}, name::Symbol, index::Integer)
     index == 1 && return name
     return haskey(columns, name) ? Symbol(name, :_, index) : name

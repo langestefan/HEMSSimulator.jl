@@ -41,10 +41,26 @@ and this project adheres to [Semantic Versioning].
 - `NL_TARIFFS_2025`, a named and dated set of Dutch tariff defaults, replacing the literals
   previously scattered through the contract and tariff definitions.
 
+- `ElectricVehicle`: a car that charges at home, with a departure/arrival schedule, per-day driving
+  energy given directly or as distance × efficiency, a state-of-charge deadline before each
+  departure, and optional V2G. `ev_schedule` expands a commuting pattern into the series it needs.
+- `consumption_columns` / `production_columns` on the asset contract, so the reporting layer
+  reconstructs the meter balance from any asset's flows without knowing its type.
+
 ### Changed
 
 - Default `energy_tax` is now the 2025 *energiebelasting* rate of 0.10154 €/kWh; it was the 2024
   rate of 0.10880 €/kWh.
+- `sweep` measures each candidate against the home *as configured* rather than against an
+  asset-less baseline, so a home that already has an EV keeps it in both arms and the reported
+  saving is what the battery adds on top.
+- `SimulationResult` carries the frame column each asset's declared result columns ended up in.
+
+### Fixed
+
+- Two assets of different types could migrate to a suffixed result column after the first
+  rolling-horizon window, splitting one asset's flows across two columns and leaving the meter
+  balance apparently violated.
 
 <!-- Links -->
 

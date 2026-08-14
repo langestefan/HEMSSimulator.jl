@@ -45,7 +45,7 @@ ones above it.
 |---|---|
 | `core/` | `TimeGrid` (the 15-min grid everything aligns to), `resample` (`StepHold`/`LinearInterp`), the `AbstractAsset` contract, `RunOptions`, `DispatchContext`, `show` methods |
 | `solar/` | `Site`/`Weather`, Erbs decomposition, transposition models (`Isotropic`/`HayDavies`/`Perez`), clear-sky reference, `PVArray` and production, `upsample_irradiance` |
-| `assets/` | Controllable assets. `battery.jl` today; EV, heat pump and DHW land here |
+| `assets/` | Controllable assets. `battery.jl` and `ev.jl` today; heat pump and DHW land here |
 | `market/` | `Contract` and grid tariffs, `NL_TARIFFS_2025`, the four `scenarios`, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
 | `analysis/` | The sizing sweep |
@@ -56,9 +56,16 @@ ones above it.
 Assets are anything the optimizer *decides about*. PV and the base load are not assets — they are
 exogenous data in `SimulationInputs`. To add one, implement the contract documented on
 `AbstractAsset` (`src/core/types.jl`): `initial_state`, `add_variables!`, `add_constraints!`,
-`power_terms`, `cost_terms`, `carry_state`, `result_columns`. `dispatch.jl` collects `power_terms`
-into the single meter balance and `cost_terms` into the objective, so nothing else needs to change.
-`src/assets/battery.jl` is the reference implementation.
+`power_terms`, `cost_terms`, `carry_state`, `result_columns`, plus `consumption_columns` and
+`production_columns`. `dispatch.jl` collects `power_terms` into the single meter balance and
+`cost_terms` into the objective, so nothing else needs to change.
+`src/assets/battery.jl` is the reference implementation; `src/assets/ev.jl` shows an asset whose
+schedule spans the whole horizon and is sliced per window via `ctx.offset`.
+
+**Do not skip `consumption_columns`/`production_columns`.** `balance_residual`, `self_consumption`
+and `self_sufficiency` rebuild the balance from the *result frame*, not the model. An asset that
+does not declare them is invisible to them, and the residual silently shows the asset's full power
+as an accounting error — which is exactly how the EV's first draft looked.
 
 ### Things that will bite you
 
@@ -77,6 +84,11 @@ into the single meter balance and `cost_terms` into the objective, so nothing el
   `OPENMETEO_RADIATION_LAG` before resampling. This is verified empirically by a test that compares
   the irradiance-weighted centre of a recorded day against the clear-sky centre — not assumed.
   Open-Meteo also defaults wind to km/h; the loader asks for m/s.
+- **Terminal value is for storage, not for a car.** `Battery` needs it or the receding horizon
+  empties it every window. `ElectricVehicle` does not — its departure targets already anchor the
+  trajectory — and crediting its stored charge made it profitable to fill 60 kWh whenever the price
+  dipped below the window median, inflating a synthetic week's charging by 26 kWh. It is therefore
+  applied only when V2G is enabled.
 - **Netting and transport are billed differently, and it matters.** *Salderen* absorbs the commodity
   price and the energy tax; the transport tariff is charged on physical flow and is never netted
   (`settle`). So a time-of-use transport tariff rewards a battery in *both* netting regimes — the

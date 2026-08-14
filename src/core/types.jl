@@ -31,6 +31,11 @@ the current rolling-horizon window.
   - `carry_state(asset, vars, k)` — the state after `k` implemented intervals, for the next window.
   - `result_columns(asset, vars, k)` — a `NamedTuple` of length-`k` vectors recorded into the
     result frame.
+  - `consumption_columns(asset)` / `production_columns(asset)` — which of those column names are
+    power drawn from and delivered to the meter. Default to empty. Implement them or the asset's
+    flows will be missing from [`balance_residual`](@ref), [`self_consumption`](@ref) and
+    [`self_sufficiency`](@ref), which reconstruct the balance from the frame rather than from the
+    model.
 
 Optional capability predicates default to `false`: [`supports_binary`](@ref), [`supports_v2g`](@ref).
 """
@@ -85,6 +90,26 @@ Solved values for the first `k` intervals, recorded into the result frame. See
 [`AbstractAsset`](@ref).
 """
 function result_columns end
+
+"""
+    consumption_columns(asset::AbstractAsset) -> Vector{Symbol}
+
+Which of the asset's [`result_columns`](@ref) are power drawn from the meter, in kW.
+
+The reporting layer reconstructs the meter balance from the result frame, not from the solved model,
+so an asset that does not declare these is invisible to it — its charging would simply not appear in
+[`balance_residual`](@ref). Declaring them here rather than hard-coding column names in
+`results.jl` is what keeps adding an asset a single-file change.
+"""
+consumption_columns(::AbstractAsset) = Symbol[]
+
+"""
+    production_columns(asset::AbstractAsset) -> Vector{Symbol}
+
+Which of the asset's [`result_columns`](@ref) are power delivered to the meter, in kW. See
+[`consumption_columns`](@ref).
+"""
+production_columns(::AbstractAsset) = Symbol[]
 
 """
     supports_binary(asset::AbstractAsset) -> Bool

@@ -124,6 +124,9 @@ result_columns(::Battery, vars, k::Integer) = (;
     battery_soc_kwh = value.(vars.energy[1:k]),
 )
 
+consumption_columns(::Battery) = [:battery_charge_kw]
+production_columns(::Battery) = [:battery_discharge_kw]
+
 """
     throughput(result::SimulationResult) -> Float64
 

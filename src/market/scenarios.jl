@@ -108,9 +108,8 @@ function scenarios(
     variable_tariff::AbstractGridTariff = peak_transport_tariff(grid),
     kwargs...,
 )
-    0 <= netting_fraction <= 1 || throw(
-        ArgumentError("netting_fraction must be in [0, 1], got $netting_fraction"),
-    )
+    0 <= netting_fraction <= 1 ||
+        throw(ArgumentError("netting_fraction must be in [0, 1], got $netting_fraction"))
     build(fraction, tariff) = Contract(
         grid;
         commodity,

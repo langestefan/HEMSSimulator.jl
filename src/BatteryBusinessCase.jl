@@ -70,6 +70,7 @@ include("solar/pv.jl")          # arrays, cell temperature, DC to AC with clippi
 include("solar/resample.jl")    # hourly to 15-minute irradiance through the clearness index
 
 include("assets/battery.jl")    # the first controllable asset
+include("assets/ev.jl")         # a car: storage with a departure deadline
 
 include("market/tariff.jl")     # contracts and network tariffs
 include("market/scenarios.jl")  # the four headline regulatory regimes
@@ -103,10 +104,12 @@ export PVArray, aoi, airmass, poa, sky_diffuse, cell_temperature
 export production, annual_yield, solar_positions, observer
 
 # Assets and system
-export AbstractAsset, Battery, HomeSystem, RunOptions, SimulationInputs
+export AbstractAsset, Battery, ElectricVehicle, ev_schedule, ev_energy_kwh
+export HomeSystem, RunOptions, SimulationInputs
 export prepare, with_assets, supports_binary, supports_v2g, initial_state
 export add_variables!,
     add_constraints!, power_terms, cost_terms, carry_state, result_columns
+export consumption_columns, production_columns
 
 # Simulation
 export SimulationResult, simulate, build_window, solve_window

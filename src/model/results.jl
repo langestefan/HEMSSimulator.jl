@@ -9,10 +9,15 @@ The outcome of a [`simulate`](@ref) run: one row per interval of the horizon.
   - `frame::DataFrame`: the dispatched flows. Always present: `timestamp`, `load_kw`,
     `pv_available_kw`, `curtail_kw`, `import_kw`, `export_kw`, `price_buy`, `price_sell`. Each
     controllable asset adds its own columns — a [`Battery`](@ref) adds `battery_charge_kw`,
-    `battery_discharge_kw` and `battery_soc_kwh`.
+    `battery_discharge_kw` and `battery_soc_kwh`, an [`ElectricVehicle`](@ref) adds
+    `ev_charge_kw`, `ev_discharge_kw`, `ev_soc_kwh` and `ev_connected`. Two assets of the same type
+    get the second one's columns suffixed.
   - `system::HomeSystem`: the home that was simulated.
   - `windows::Int`: number of optimization windows solved.
   - `solve_time::Float64`: total wall-clock seconds spent in the solver.
+  - `asset_columns::Vector{Dict{Symbol,Symbol}}`: for each asset, the frame column its declared
+    [`result_columns`](@ref) names ended up in. Two assets of the same type write to suffixed
+    columns, so this mapping is how the reporting functions find the right one.
 
 The frame is the raw material for [`settle`](@ref); everything downstream reads it rather than
 re-deriving flows.
@@ -23,6 +28,35 @@ struct SimulationResult
     system::HomeSystem
     windows::Int
     solve_time::Float64
+    asset_columns::Vector{Dict{Symbol,Symbol}}
+end
+
+SimulationResult(
+    grid::TimeGrid,
+    frame::DataFrame,
+    system::HomeSystem,
+    windows::Integer,
+    solve_time::Real,
+) = SimulationResult(
+    grid,
+    frame,
+    system,
+    Int(windows),
+    float(solve_time),
+    [Dict{Symbol,Symbol}() for _ in system.assets],
+)
+
+# Sum the frame columns an asset declared as drawing from, or delivering to, the meter. Assets that
+# declare nothing contribute nothing, which is why `consumption_columns` is part of the contract.
+function _asset_power(result::SimulationResult, which::Function)
+    total = zeros(Float64, result.grid.n)
+    for (asset, mapping) in zip(result.system.assets, result.asset_columns)
+        for name in which(asset)
+            column = get(mapping, name, name)
+            hasproperty(result.frame, column) && (total .+= result.frame[!, column])
+        end
+    end
+    return total
 end
 
 Base.length(result::SimulationResult) = result.grid.n
@@ -70,24 +104,17 @@ consumed_kwh(result::SimulationResult) = energy(result, :load_kw)
 Per-interval on-site demand in kW: the base load plus anything the assets consume. This is the
 ceiling on how much PV can be self-consumed in an interval.
 """
-function onsite_sinks(result::SimulationResult)
-    sinks = copy(result.frame.load_kw)
-    hasproperty(result.frame, :battery_charge_kw) &&
-        (sinks .+= result.frame.battery_charge_kw)
-    return sinks
-end
+onsite_sinks(result::SimulationResult) =
+    result.frame.load_kw .+ _asset_power(result, consumption_columns)
 
 """
     onsite_supply(result::SimulationResult) -> Vector{Float64}
 
 Per-interval on-site generation in kW: PV actually used plus anything the assets discharge.
 """
-function onsite_supply(result::SimulationResult)
-    supply = result.frame.pv_available_kw .- result.frame.curtail_kw
-    hasproperty(result.frame, :battery_discharge_kw) &&
-        (supply .+= result.frame.battery_discharge_kw)
-    return supply
-end
+onsite_supply(result::SimulationResult) =
+    result.frame.pv_available_kw .- result.frame.curtail_kw .+
+    _asset_power(result, production_columns)
 
 """
     self_consumption(result::SimulationResult) -> Float64
@@ -131,10 +158,7 @@ regardless of what the objective reported.
 """
 function balance_residual(result::SimulationResult)
     frame = result.frame
-    residual =
-        frame.import_kw .- frame.export_kw .+ frame.pv_available_kw .- frame.curtail_kw .-
-        frame.load_kw
-    hasproperty(frame, :battery_discharge_kw) && (residual .+= frame.battery_discharge_kw)
-    hasproperty(frame, :battery_charge_kw) && (residual .-= frame.battery_charge_kw)
-    return residual
+    return frame.import_kw .- frame.export_kw .+ frame.pv_available_kw .- frame.curtail_kw .-
+           frame.load_kw .+ _asset_power(result, production_columns) .-
+           _asset_power(result, consumption_columns)
 end

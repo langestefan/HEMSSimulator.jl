@@ -79,8 +79,8 @@ end
     )
 end
 
-@testitem "Netting changes what an exported kWh is worth" tags =
-    [:unit, :fast] setup = [BillFixtures] begin
+@testitem "Netting changes what an exported kWh is worth" tags = [:unit, :fast] setup =
+    [BillFixtures] begin
     using Dates: DateTime
 
     grid = TimeGrid(DateTime(2024, 1, 1), 4)
