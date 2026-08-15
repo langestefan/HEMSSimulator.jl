@@ -34,7 +34,7 @@ grid, weather, prices, load = inputs.grid, inputs.weather, inputs.prices, inputs
 contract = Contract(
     grid;
     commodity = prices .+ MARKUP,
-    feed_in = FEED_IN,
+    feed_in = prices .+ FEED_IN_ADDER,
     energy_tax = ENERGY_TAX,
     net_metering_fraction = 0.0,
     grid = FixedCapacityTariff(),

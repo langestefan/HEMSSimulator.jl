@@ -7,16 +7,36 @@ using Dates
 const SITE = Site(52.1, 5.18)                       # Utrecht
 const YEAR = TimeGrid(DateTime(2025, 1, 1), DateTime(2026, 1, 1))
 
-# Tibber resells the day-ahead price. Fitted against a Tibber app screenshot for 2026-08-14: the
-# consumer price is (day-ahead + 0.1121) x 1.21, where 1.21 is VAT. The extrema landed on the same
-# quarter-hours and the additive constant agreed to 0.008 ct whether solved from the day's mean, its
-# maximum or its minimum — so the *total* below is measured. Its split into supplier markup and
-# energiebelasting is a label, not a measurement, and does not affect this study: with net metering
-# off, tax is charged on every imported kWh, so only the sum enters the bill.
-const TIBBER_ADDITIVE = 0.1121       # EUR/kWh excluding VAT
+# Both consumer prices are calibrated against a VRM "Energy prices" panel for 2026-08-14, read with
+# net metering off, and against the *fetched* ENTSO-E day-ahead prices for the same day rather than
+# an assumed series. The anchor is VRM's own tooltip, which gives an exact pair for one hour:
+#
+#     local 20:00-20:59  buy EUR 0.4753   sell EUR 0.2881
+#     ENTSO-E mean for that hour (UTC 18:00-19:00)      EUR 0.26279 / kWh
+#
+#     buy  = (day-ahead + 0.13002) * 1.21      1.21 being VAT
+#     sell =  day-ahead + 0.02531
+#
+# VRM plots local time and this package works in UTC throughout, so the hour had to be shifted by
+# CEST's +2 before comparing; without that the fit is out by two hours and looks like noise.
+#
+# Reading the other 23 steps off the chart supports both constants (the five clearest hours give buy
+# additives of 0.1299-0.1316) but cannot refine them: a step chart read from a screenshot carries
+# about an hour of assignment error, which in the steep 15:00-19:00 stretch swamps the constant being
+# fitted. One exact pair beats twenty-four approximate ones, so these come from the tooltip alone.
+#
+# This supersedes an earlier fit of 0.1121 taken from a Tibber app screenshot of the same day. The
+# two disagree by 1.8 ct/kWh excluding VAT and the difference is not explained here; VRM is what this
+# house actually reports, so VRM wins.
+const TIBBER_ADDITIVE = 0.13002      # EUR/kWh excluding VAT
 const ENERGY_TAX = 0.0989            # nominal split
 const MARKUP = TIBBER_ADDITIVE - ENERGY_TAX
-const FEED_IN = 0.04                 # terugleververgoeding, EUR/kWh
+
+# The sell price *tracks the day-ahead price* — it is not a fixed feed-in tariff. This matters more
+# than the constant does: at a flat 0.04 the battery can never earn anything by exporting into the
+# evening peak, and every kWh it holds is worth only what it displaces. Spot-linked, the same kWh is
+# worth 0.29 at 20:00, and exporting becomes a strategy rather than a leftover.
+const FEED_IN_ADDER = 0.02531        # EUR/kWh on top of the day-ahead price
 
 const PV = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)]
 const HOUSEHOLD_KWH = 3500.0         # base load, excluding the car
