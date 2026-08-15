@@ -42,13 +42,14 @@ println(
 
 save_inputs(DATA, YEAR, weather, prices, load)
 
-# No net metering, flat capacity tariff — the regime the Netherlands is moving to, and the regime
-# the calibration in `run-config.jl` was read under. Both prices are spot-linked; the sell price is a
-# series rather than a constant, which is the whole reason exporting into the evening peak can pay.
+# No net metering, flat capacity tariff — the regime the Netherlands is moving to, and the one
+# `run-config.jl`'s calibration was read under. Both prices are spot-linked and the sell price is a
+# series rather than a constant, which is what makes exporting into the evening peak worth doing;
+# `energy_tax` and VAT are charged on import only, which is what keeps a grid round trip unprofitable.
 contract = Contract(
     YEAR;
     commodity = prices .+ MARKUP,
-    feed_in = prices .+ FEED_IN_ADDER,
+    feed_in = feed_in_price(prices),
     energy_tax = ENERGY_TAX,
     net_metering_fraction = 0.0,
     grid = FixedCapacityTariff(),

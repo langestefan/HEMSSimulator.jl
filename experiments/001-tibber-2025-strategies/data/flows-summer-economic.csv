@@ -288,7 +288,7 @@ timestamp,hour,series,direction,kw
 2025-07-11T23:30:00.0,71.5,PV,source,0.0
 2025-07-11T23:45:00.0,71.75,PV,source,0.0
 2025-07-09T00:00:00.0,0.0,import,source,11.127971066959216
-2025-07-09T00:15:00.0,0.25,import,source,6.39597768817626
+2025-07-09T00:15:00.0,0.25,import,source,6.395977688176229
 2025-07-09T00:30:00.0,0.5,import,source,0.12147424549904305
 2025-07-09T00:45:00.0,0.75,import,source,0.13389578434948793
 2025-07-09T01:00:00.0,1.0,import,source,0.0
@@ -660,9 +660,9 @@ timestamp,hour,series,direction,kw
 2025-07-09T20:30:00.0,20.5,battery discharge,source,0.5708152381142321
 2025-07-09T20:45:00.0,20.75,battery discharge,source,0.5997778863688519
 2025-07-09T21:00:00.0,21.0,battery discharge,source,0.4102545123752964
-2025-07-09T21:15:00.0,21.25,battery discharge,source,0.4357675908849987
-2025-07-09T21:30:00.0,21.5,battery discharge,source,0.2923849113780247
-2025-07-09T21:45:00.0,21.75,battery discharge,source,4.2693656484777485
+2025-07-09T21:15:00.0,21.25,battery discharge,source,4.419461910815939
+2025-07-09T21:30:00.0,21.5,battery discharge,source,0.2923849113780249
+2025-07-09T21:45:00.0,21.75,battery discharge,source,0.28567132854680705
 2025-07-09T22:00:00.0,22.0,battery discharge,source,0.21605822231503527
 2025-07-09T22:15:00.0,22.25,battery discharge,source,0.1908915363468873
 2025-07-09T22:30:00.0,22.5,battery discharge,source,0.15111911468372355
@@ -672,9 +672,9 @@ timestamp,hour,series,direction,kw
 2025-07-09T23:30:00.0,23.5,battery discharge,source,0.13648425855549132
 2025-07-09T23:45:00.0,23.75,battery discharge,source,0.14364826077247875
 2025-07-10T00:00:00.0,24.0,battery discharge,source,0.13385484626411417
-2025-07-10T00:15:00.0,24.25,battery discharge,source,0.1300762676679312
-2025-07-10T00:30:00.0,24.5,battery discharge,source,0.1337289614215009
-2025-07-10T00:45:00.0,24.75,battery discharge,source,0.11187320685044946
+2025-07-10T00:15:00.0,24.25,battery discharge,source,0.13007626766793137
+2025-07-10T00:30:00.0,24.5,battery discharge,source,0.13372896142150087
+2025-07-10T00:45:00.0,24.75,battery discharge,source,0.11187320685044953
 2025-07-10T01:00:00.0,25.0,battery discharge,source,0.0
 2025-07-10T01:15:00.0,25.25,battery discharge,source,-0.0
 2025-07-10T01:30:00.0,25.5,battery discharge,source,0.0
@@ -743,14 +743,14 @@ timestamp,hour,series,direction,kw
 2025-07-10T17:15:00.0,41.25,battery discharge,source,0.0
 2025-07-10T17:30:00.0,41.5,battery discharge,source,5.0
 2025-07-10T17:45:00.0,41.75,battery discharge,source,0.4223562599469717
-2025-07-10T18:00:00.0,42.0,battery discharge,source,5.0
+2025-07-10T18:00:00.0,42.0,battery discharge,source,0.6704798784394385
 2025-07-10T18:15:00.0,42.25,battery discharge,source,5.0
-2025-07-10T18:30:00.0,42.5,battery discharge,source,0.8775216814383329
+2025-07-10T18:30:00.0,42.5,battery discharge,source,5.0
 2025-07-10T18:45:00.0,42.75,battery discharge,source,1.0063564130513376
 2025-07-10T19:00:00.0,43.0,battery discharge,source,1.0793777203716448
 2025-07-10T19:15:00.0,43.25,battery discharge,source,1.0556126727271453
 2025-07-10T19:30:00.0,43.5,battery discharge,source,1.0912562313880207
-2025-07-10T19:45:00.0,43.75,battery discharge,source,4.305538476052437
+2025-07-10T19:45:00.0,43.75,battery discharge,source,4.51258027905133
 2025-07-10T20:00:00.0,44.0,battery discharge,source,0.8265349058974513
 2025-07-10T20:15:00.0,44.25,battery discharge,source,0.7080862531044299
 2025-07-10T20:30:00.0,44.5,battery discharge,source,0.684300470179884
@@ -1152,7 +1152,7 @@ timestamp,hour,series,direction,kw
 2025-07-11T23:30:00.0,71.5,export,sink,0.0
 2025-07-11T23:45:00.0,71.75,export,sink,0.0
 2025-07-09T00:00:00.0,0.0,ev charge,sink,11.0
-2025-07-09T00:15:00.0,0.25,ev charge,sink,6.268989869268769
+2025-07-09T00:15:00.0,0.25,ev charge,sink,6.268989869268738
 2025-07-09T00:30:00.0,0.5,ev charge,sink,0.0
 2025-07-09T00:45:00.0,0.75,ev charge,sink,0.0
 2025-07-09T01:00:00.0,1.0,ev charge,sink,0.0
@@ -1161,11 +1161,11 @@ timestamp,hour,series,direction,kw
 2025-07-09T01:45:00.0,1.75,ev charge,sink,0.0
 2025-07-09T02:00:00.0,2.0,ev charge,sink,-0.0
 2025-07-09T02:15:00.0,2.25,ev charge,sink,-0.0
-2025-07-09T02:30:00.0,2.5,ev charge,sink,-0.0
+2025-07-09T02:30:00.0,2.5,ev charge,sink,0.0
 2025-07-09T02:45:00.0,2.75,ev charge,sink,0.0
-2025-07-09T03:00:00.0,3.0,ev charge,sink,-0.0
-2025-07-09T03:15:00.0,3.25,ev charge,sink,-0.0
-2025-07-09T03:30:00.0,3.5,ev charge,sink,-0.0
+2025-07-09T03:00:00.0,3.0,ev charge,sink,0.0
+2025-07-09T03:15:00.0,3.25,ev charge,sink,0.0
+2025-07-09T03:30:00.0,3.5,ev charge,sink,0.0
 2025-07-09T03:45:00.0,3.75,ev charge,sink,0.0
 2025-07-09T04:00:00.0,4.0,ev charge,sink,0.0
 2025-07-09T04:15:00.0,4.25,ev charge,sink,0.0
@@ -1236,9 +1236,9 @@ timestamp,hour,series,direction,kw
 2025-07-09T20:30:00.0,20.5,ev charge,sink,0.0
 2025-07-09T20:45:00.0,20.75,ev charge,sink,0.0
 2025-07-09T21:00:00.0,21.0,ev charge,sink,0.0
-2025-07-09T21:15:00.0,21.25,ev charge,sink,0.0
-2025-07-09T21:30:00.0,21.5,ev charge,sink,0.0
-2025-07-09T21:45:00.0,21.75,ev charge,sink,3.9836943199309416
+2025-07-09T21:15:00.0,21.25,ev charge,sink,3.9836943199309403
+2025-07-09T21:30:00.0,21.5,ev charge,sink,-0.0
+2025-07-09T21:45:00.0,21.75,ev charge,sink,0.0
 2025-07-09T22:00:00.0,22.0,ev charge,sink,-0.0
 2025-07-09T22:15:00.0,22.25,ev charge,sink,0.0
 2025-07-09T22:30:00.0,22.5,ev charge,sink,-0.0
@@ -1248,9 +1248,9 @@ timestamp,hour,series,direction,kw
 2025-07-09T23:30:00.0,23.5,ev charge,sink,-0.0
 2025-07-09T23:45:00.0,23.75,ev charge,sink,-0.0
 2025-07-10T00:00:00.0,24.0,ev charge,sink,-0.0
-2025-07-10T00:15:00.0,24.25,ev charge,sink,-0.0
-2025-07-10T00:30:00.0,24.5,ev charge,sink,-0.0
-2025-07-10T00:45:00.0,24.75,ev charge,sink,-0.0
+2025-07-10T00:15:00.0,24.25,ev charge,sink,0.0
+2025-07-10T00:30:00.0,24.5,ev charge,sink,0.0
+2025-07-10T00:45:00.0,24.75,ev charge,sink,0.0
 2025-07-10T01:00:00.0,25.0,ev charge,sink,11.0
 2025-07-10T01:15:00.0,25.25,ev charge,sink,5.05135011440131
 2025-07-10T01:30:00.0,25.5,ev charge,sink,0.0
@@ -1319,14 +1319,14 @@ timestamp,hour,series,direction,kw
 2025-07-10T17:15:00.0,41.25,ev charge,sink,0.0
 2025-07-10T17:30:00.0,41.5,ev charge,sink,4.793406011903226
 2025-07-10T17:45:00.0,41.75,ev charge,sink,0.0
-2025-07-10T18:00:00.0,42.0,ev charge,sink,4.329520121560561
+2025-07-10T18:00:00.0,42.0,ev charge,sink,0.0
 2025-07-10T18:15:00.0,42.25,ev charge,sink,4.18273315001189
-2025-07-10T18:30:00.0,42.5,ev charge,sink,0.0
+2025-07-10T18:30:00.0,42.5,ev charge,sink,4.122478318561667
 2025-07-10T18:45:00.0,42.75,ev charge,sink,0.0
 2025-07-10T19:00:00.0,43.0,ev charge,sink,0.0
 2025-07-10T19:15:00.0,43.25,ev charge,sink,0.0
 2025-07-10T19:30:00.0,43.5,ev charge,sink,0.0
-2025-07-10T19:45:00.0,43.75,ev charge,sink,3.3894243304229086
+2025-07-10T19:45:00.0,43.75,ev charge,sink,3.596466133421802
 2025-07-10T20:00:00.0,44.0,ev charge,sink,0.0
 2025-07-10T20:15:00.0,44.25,ev charge,sink,0.0
 2025-07-10T20:30:00.0,44.5,ev charge,sink,0.0
@@ -1505,9 +1505,9 @@ timestamp,hour,series,direction,kw
 2025-07-09T15:45:00.0,15.75,battery charge,sink,0.0
 2025-07-09T16:00:00.0,16.0,battery charge,sink,0.0
 2025-07-09T16:15:00.0,16.25,battery charge,sink,0.0
-2025-07-09T16:30:00.0,16.5,battery charge,sink,0.0
+2025-07-09T16:30:00.0,16.5,battery charge,sink,-0.0
 2025-07-09T16:45:00.0,16.75,battery charge,sink,0.0
-2025-07-09T17:00:00.0,17.0,battery charge,sink,-0.0
+2025-07-09T17:00:00.0,17.0,battery charge,sink,0.0
 2025-07-09T17:15:00.0,17.25,battery charge,sink,-0.0
 2025-07-09T17:30:00.0,17.5,battery charge,sink,0.0
 2025-07-09T17:45:00.0,17.75,battery charge,sink,0.0

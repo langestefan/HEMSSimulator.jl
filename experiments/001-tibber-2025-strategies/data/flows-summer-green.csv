@@ -1481,7 +1481,7 @@ timestamp,hour,series,direction,kw
 2025-07-09T09:45:00.0,9.75,battery charge,sink,0.0
 2025-07-09T10:00:00.0,10.0,battery charge,sink,2.056712499572518
 2025-07-09T10:15:00.0,10.25,battery charge,sink,0.0
-2025-07-09T10:30:00.0,10.5,battery charge,sink,-0.0
+2025-07-09T10:30:00.0,10.5,battery charge,sink,0.0
 2025-07-09T10:45:00.0,10.75,battery charge,sink,0.0
 2025-07-09T11:00:00.0,11.0,battery charge,sink,2.9306595814009144
 2025-07-09T11:15:00.0,11.25,battery charge,sink,3.0358109123508297

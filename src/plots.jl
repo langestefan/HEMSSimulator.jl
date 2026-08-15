@@ -791,8 +791,11 @@ tariff is flat across its interval and jumps at the boundary.
   - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Every
     combination is simulated *before the window opens* — see `precompute` — so switching is instant.
   - **toggles** filter the dispatch stack. State panels always show every asset.
-  - **cards** recomputed for the visible window: from the grid, to the grid, PV used, and what that
-    window cost at the dispatch price.
+  - two rows of **cards**. The first is the visible window — from the grid, to the grid, PV used, and
+    what that window cost at the dispatch price. The second is the business case for the selection,
+    and does not move when the window does: annual bill, annual saving against the same home with no
+    candidate, NPV, payback and cycles a year. NPV and payback need `investment`; without it they
+    read `—` and the rest still works.
 
 # Arguments
 
@@ -806,6 +809,8 @@ tariff is flat across its interval and jumps at the boundary.
     the same picture in different clothes — dark uses [`VRM_COLOURS`](@ref) to match the portal, light
     uses the colour-blind-safe [`ASSET_COLOURS`](@ref). Take a screenshot for anyone who has to read
     it from the light one.
+  - `investment`: a function from a candidate asset to an [`Investment`](@ref), exactly as
+    [`sweep`](@ref) takes. Supplies the NPV and payback cards; omit it and those two read `—`.
   - `precompute = true`: simulate every scenario × candidate × strategy up front, threaded, before
     the window opens. **Do not turn this off for a long horizon.** Solving on first selection sounds
     cheaper, but the solve runs inside the menu's event callback: for however long it takes, GLMakie

@@ -7,36 +7,40 @@ using Dates
 const SITE = Site(52.1, 5.18)                       # Utrecht
 const YEAR = TimeGrid(DateTime(2025, 1, 1), DateTime(2026, 1, 1))
 
-# Both consumer prices are calibrated against a VRM "Energy prices" panel for 2026-08-14, read with
-# net metering off, and against the *fetched* ENTSO-E day-ahead prices for the same day rather than
-# an assumed series. The anchor is VRM's own tooltip, which gives an exact pair for one hour:
+# Read off Tibber's own itemised price table for 2026-08-15, which breaks a consumer kWh into its
+# four parts — so these are not fitted constants, they are the supplier's own line items:
 #
-#     local 20:00-20:59  buy EUR 0.4753   sell EUR 0.2881
-#     ENTSO-E mean for that hour (UTC 18:00-19:00)      EUR 0.26279 / kWh
+#     Marktprijs   Inkoopverg.   Energiebel.   BTW      Totaal
+#     0.1777       0.0205        0.0916        0.0609   0.3507   (local 00:00)
 #
-#     buy  = (day-ahead + 0.13002) * 1.21      1.21 being VAT
-#     sell =  day-ahead + 0.02531
+#     import = (Marktprijs + 0.0205 + 0.0916) * 1.21
 #
-# VRM plots local time and this package works in UTC throughout, so the hour had to be shifted by
-# CEST's +2 before comparing; without that the fit is out by two hours and looks like noise.
+# Checked against all 24 quarter-hours of the table: the model reproduces both the BTW and the Totaal
+# columns to 4.8e-5 EUR/kWh, which is the rounding of a four-decimal display.
 #
-# Reading the other 23 steps off the chart supports both constants (the five clearest hours give buy
-# additives of 0.1299-0.1316) but cannot refine them: a step chart read from a screenshot carries
-# about an hour of assignment error, which in the steep 15:00-19:00 stretch swamps the constant being
-# fitted. One exact pair beats twenty-four approximate ones, so these come from the tooltip alone.
+# Two things this settles that a fit could not:
 #
-# This supersedes an earlier fit of 0.1121 taken from a Tibber app screenshot of the same day. The
-# two disagree by 1.8 ct/kWh excluding VAT and the difference is not explained here; VRM is what this
-# house actually reports, so VRM wins.
-const TIBBER_ADDITIVE = 0.13002      # EUR/kWh excluding VAT
-const ENERGY_TAX = 0.0989            # nominal split
-const MARKUP = TIBBER_ADDITIVE - ENERGY_TAX
+#   - **Marktprijs is the raw ENTSO-E day-ahead price.** Fetched for the same quarter-hours, the two
+#     agree to 4e-5 EUR/kWh across all 24 — again display rounding. No supplier index, no smoothing.
+#   - **Local time is CEST, +2 on the UTC this package works in.** Confirmed on every quarter-hour.
+#     Compare without shifting and the alignment is out by two hours, which reads as noise rather
+#     than as an error.
+#
+# An earlier calibration here used 0.1300 taken from a Victron VRM panel. That was a *different
+# supplier* — the two are not reconcilable and should not have been compared.
+const MARKUP = 0.0205                # inkoopvergoeding, EUR/kWh excluding VAT
+const ENERGY_TAX = 0.0916            # energiebelasting, EUR/kWh excluding VAT
+const TIBBER_ADDITIVE = MARKUP + ENERGY_TAX
 
-# The sell price *tracks the day-ahead price* — it is not a fixed feed-in tariff. This matters more
-# than the constant does: at a flat 0.04 the battery can never earn anything by exporting into the
-# evening peak, and every kWh it holds is worth only what it displaces. Spot-linked, the same kWh is
-# worth 0.29 at 20:00, and exporting becomes a strategy rather than a leftover.
-const FEED_IN_ADDER = 0.02531        # EUR/kWh on top of the day-ahead price
+# With netting off, energiebelasting and BTW are charged on every imported kWh and refunded on none,
+# so an exported kWh is worth the commodity price alone — `Marktprijs + Inkoopverg.`, no tax, no VAT.
+# That is the whole of the import/export spread: 0.35 against 0.20 at midnight on the table above.
+#
+# The consequence for a battery is the point of the study. The sell price is *spot-linked*, so a kWh
+# held until the evening peak is worth what the evening peak pays; but it is also always below the
+# buy price by tax and VAT, so a round trip through the grid can never pay for itself. Storing to
+# self-consume and storing to export are both worth doing, and buying to export never is.
+feed_in_price(prices) = prices .+ MARKUP
 
 const PV = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)]
 const HOUSEHOLD_KWH = 3500.0         # base load, excluding the car

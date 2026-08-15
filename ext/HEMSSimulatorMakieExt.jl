@@ -41,6 +41,13 @@ const HOURS_PER_DAY = 24
 
 _colour(hex::AbstractString, alpha::Real = 1.0) = (Makie.parse(Makie.Colorant, hex), alpha)
 
+# Makie's block attributes are typed, and not uniformly. An `Axis` parses a hex string for you; a
+# `Menu`'s cell colours, a `Toggle`'s frame and a `Box`'s fill are `RGBAf` fields, and a String
+# assigned to one of those survives the assignment and then fails *inside the render loop* — where it
+# takes the window down with a `convert(::String, ::RGBA)` that names none of this code. So every
+# colour crosses into Makie through here.
+_c(hex::AbstractString) = to_color(hex)
+
 # Hours from the start of the drawn window, which reads better on an axis than absolute timestamps
 # and stays honest when the series has been averaged into blocks.
 function _axis_hours(result::SimulationResult, rows, blocks::Integer)
@@ -508,6 +515,7 @@ function HEMSSimulator.dashboard(
     width::Integer = 3,
     max_points::Integer = PLOT_MAX_POINTS,
     precompute::Bool = true,
+    investment = nothing,
     theme::Symbol = :dark,
     size = (1500, 1020),
 )
@@ -519,8 +527,13 @@ function HEMSSimulator.dashboard(
     scenario_names = collect(keys(regimes))
     plan_names = collect(keys(plans))
 
+    # Candidate 0 is the home *without* a candidate — the baseline every saving is measured against,
+    # and the reason the financial cards can show a saving at all.
+    _assets(candidate::Int) =
+        candidate == 0 ? system.assets : vcat(system.assets, [candidates[candidate]])
+
     _run(scenario::Symbol, candidate::Int, plan::Symbol; progress = nothing) = simulate(
-        with_assets(system, vcat(system.assets, [candidates[candidate]])),
+        with_assets(system, _assets(candidate)),
         weather,
         load_kw,
         regimes[scenario];
@@ -541,7 +554,7 @@ function HEMSSimulator.dashboard(
     if precompute
         combos = [
             (scenario, candidate, plan) for scenario in scenario_names for
-            candidate in eachindex(candidates) for plan in plan_names
+            candidate = 0:length(candidates) for plan in plan_names
         ]
         # One bar over *windows*, not over combinations. With more threads than combinations they all
         # run at once and finish together, so a combination-level bar would sit at zero for the whole
@@ -567,10 +580,11 @@ function HEMSSimulator.dashboard(
     # is a redraw and not a rebuild.
     palette = Ref(plot_theme(theme))
 
-    figure = Figure(; size, backgroundcolor = palette[].background)
+    figure = Figure(; size, backgroundcolor = _c(palette[].background))
     left = figure[1, 1] = GridLayout()
     right = figure[1, 2] = GridLayout(; tellheight = false)
     cards = figure[2, 1:2] = GridLayout()
+    money = figure[3, 1:2] = GridLayout()
     colsize!(figure.layout, 1, Relative(0.80))
 
     initial = simulation(first(scenario_names), 1, first(plan_names))
@@ -701,46 +715,58 @@ function HEMSSimulator.dashboard(
 
     window_label =
         Label(left[10+panel_count, 1], ""; halign = :left, fontsize = 11, tellwidth = false)
+    row_labels = [
+        Label(cards[1, 0], "window"; halign = :right, fontsize = 11),
+        Label(money[1, 0], "annual"; halign = :right, fontsize = 11),
+    ]
 
-    # VRM's cards. One number each, for whatever window is on screen.
-    card_titles = ("From grid", "To grid", "PV used", "Window cost")
-    card_boxes = Box[]
-    card_heads = Label[]
-    card_values = Label[]
-    for (column, title) in enumerate(card_titles)
-        inner = cards[1, column] = GridLayout()
-        push!(
-            card_boxes,
-            Box(
-                inner[1:2, 1];
-                color = palette[].panel,
-                strokevisible = false,
-                cornerradius = 6,
-            ),
-        )
-        push!(
-            card_heads,
-            Label(
-                inner[1, 1],
-                title;
-                halign = :left,
-                fontsize = 11,
-                tellwidth = false,
-                padding = (14, 14, 10, 0),
-            ),
-        )
-        push!(
-            card_values,
-            Label(
-                inner[2, 1],
-                "—";
-                halign = :left,
-                fontsize = 24,
-                tellwidth = false,
-                padding = (14, 14, 0, 12),
-            ),
-        )
+    # VRM's cards. The first row is the visible window; the second is the business case, which does
+    # not depend on the window at all — so the two rows are labelled to say which is which.
+    function _card_row(parent, titles)
+        boxes, heads, values = Box[], Label[], Label[]
+        for (column, title) in enumerate(titles)
+            inner = parent[1, column] = GridLayout()
+            push!(
+                boxes,
+                Box(
+                    inner[1:2, 1];
+                    color = _c(palette[].panel),
+                    strokevisible = false,
+                    cornerradius = 6,
+                ),
+            )
+            push!(
+                heads,
+                Label(
+                    inner[1, 1],
+                    title;
+                    halign = :left,
+                    fontsize = 11,
+                    tellwidth = false,
+                    padding = (14, 14, 10, 0),
+                ),
+            )
+            push!(
+                values,
+                Label(
+                    inner[2, 1],
+                    "—";
+                    halign = :left,
+                    fontsize = 22,
+                    tellwidth = false,
+                    padding = (14, 14, 0, 12),
+                ),
+            )
+        end
+        return boxes, heads, values
     end
+
+    card_boxes, card_heads, card_values =
+        _card_row(cards, ("From grid", "To grid", "PV used", "Window cost"))
+    money_boxes, money_heads, money_values = _card_row(
+        money,
+        ("Annual bill", "Annual saving", "NPV", "Payback", "Cycles / year"),
+    )
 
     # Rebuilt rather than restyled on a theme change: a legend entry carries its swatch colour, and
     # the swatch is exactly what the theme changes.
@@ -759,7 +785,7 @@ function HEMSSimulator.dashboard(
                 orientation = :horizontal,
                 nbanks = 1,
                 framevisible = false,
-                labelcolor = palette[].foreground,
+                labelcolor = _c(palette[].foreground),
                 labelsize = 11,
                 colgap = 14,
                 patchsize = (11, 11),
@@ -781,63 +807,85 @@ function HEMSSimulator.dashboard(
     # recoloured by `refresh`, which reads `palette[]` when it redraws.
     function _apply_theme!()
         active = palette[]
-        figure.scene.backgroundcolor[] = to_color(active.background)
+        figure.scene.backgroundcolor[] = _c(active.background)
         for axis in vcat(price_axis, energy_axis, state_axes)
-            axis.backgroundcolor = active.background
-            axis.xgridcolor = active.grid
-            axis.ygridcolor = active.grid
-            axis.xminorgridcolor = active.minorgrid
-            axis.yminorgridcolor = active.minorgrid
+            axis.backgroundcolor = _c(active.background)
+            axis.xgridcolor = _c(active.grid)
+            axis.ygridcolor = _c(active.grid)
+            axis.xminorgridcolor = _c(active.minorgrid)
+            axis.yminorgridcolor = _c(active.minorgrid)
             # VRM draws no box: an axis line along the bottom and the left, and nothing else.
             axis.topspinevisible = false
             axis.rightspinevisible = false
-            axis.leftspinecolor = active.grid
-            axis.bottomspinecolor = active.grid
-            axis.xtickcolor = active.muted
-            axis.ytickcolor = active.muted
-            axis.xminortickcolor = active.muted
-            axis.yminortickcolor = active.muted
-            axis.xticklabelcolor = active.muted
-            axis.yticklabelcolor = active.muted
-            axis.xlabelcolor = active.muted
-            axis.ylabelcolor = active.muted
-            axis.titlecolor = active.foreground
+            axis.leftspinecolor = _c(active.grid)
+            axis.bottomspinecolor = _c(active.grid)
+            axis.xtickcolor = _c(active.muted)
+            axis.ytickcolor = _c(active.muted)
+            axis.xminortickcolor = _c(active.muted)
+            axis.yminortickcolor = _c(active.muted)
+            axis.xticklabelcolor = _c(active.muted)
+            axis.yticklabelcolor = _c(active.muted)
+            axis.xlabelcolor = _c(active.muted)
+            axis.ylabelcolor = _c(active.muted)
+            axis.titlecolor = _c(active.foreground)
         end
-        for label in vcat(headings, menu_labels, toggle_labels, card_heads)
-            label.color = active.foreground
+        for label in vcat(headings, menu_labels, toggle_labels, card_heads, money_heads)
+            label.color = _c(active.foreground)
         end
-        for label in vcat(units, window_label)
-            label.color = active.muted
+        for label in vcat(units, window_label, row_labels)
+            label.color = _c(active.muted)
         end
-        foreach(box -> box.color = active.panel, card_boxes)
-        foreach(label -> label.color = active.foreground, card_values)
+        foreach(box -> box.color = _c(active.panel), vcat(card_boxes, money_boxes))
+        foreach(
+            label -> label.color = _c(active.foreground),
+            vcat(card_values, money_values),
+        )
         # Makie's controls default to a light chrome that looks pasted on over a dark panel.
         for menu in
             filter(!isnothing, (scenario_menu, battery_menu, strategy_menu, theme_menu))
-            menu.textcolor = active.foreground
-            menu.dropdown_arrow_color = active.muted
-            menu.cell_color_inactive_even = active.panel
-            menu.cell_color_inactive_odd = active.panel
-            menu.cell_color_hover = active.grid
-            menu.cell_color_active = active.grid
-            menu.selection_cell_color_inactive = active.panel
+            menu.textcolor = _c(active.foreground)
+            menu.dropdown_arrow_color = _c(active.muted)
+            menu.cell_color_inactive_even = _c(active.panel)
+            menu.cell_color_inactive_odd = _c(active.panel)
+            menu.cell_color_hover = _c(active.grid)
+            menu.cell_color_active = _c(active.grid)
+            menu.selection_cell_color_inactive = _c(active.panel)
         end
         for toggle in toggles
-            toggle.framecolor_inactive = active.grid
+            toggle.framecolor_inactive = _c(active.grid)
             toggle.framecolor_active = first(_colour(active.colours.battery))
         end
         for slider in sliders.sliders
-            slider.color_inactive = active.grid
-            slider.color_active_dimmed = active.panel
+            slider.color_inactive = _c(active.grid)
+            slider.color_active_dimmed = _c(active.panel)
         end
         for slider in sliders.labels
-            slider.color = active.muted
+            slider.color = _c(active.muted)
         end
         for value in sliders.valuelabels
-            value.color = active.muted
+            value.color = _c(active.muted)
         end
         _rebuild_legends!()
         return nothing
+    end
+
+    # The business case for one selection. It depends on the choice and never on the window, so it is
+    # memoised: dragging a slider must not resettle a year of flows.
+    finance = Dict{Tuple{Symbol,Int,Symbol},NamedTuple}()
+    function _finance(scenario::Symbol, candidate::Int, plan::Symbol)
+        return get!(finance, (scenario, candidate, plan)) do
+            contract = regimes[scenario]
+            case = simulation(scenario, candidate, plan)
+            case_bill = settle(case, contract)
+            base_bill = settle(simulation(scenario, 0, plan), contract)
+            spent = annualise(case_bill)
+            saved = annualise(base_bill) - spent
+            cycles = cycles_per_year(case)
+            investment === nothing &&
+                return (; spent, saved, cycles, npv = nothing, payback = nothing)
+            k = kpis(base_bill, case_bill, investment(candidates[candidate]); result = case)
+            return (; spent, saved, cycles, npv = k.npv, payback = k.payback_years)
+        end
     end
 
     # Makie blanks a menu's `selection` to `nothing` whenever its `i_selected` reaches 0 — an options
@@ -898,7 +946,7 @@ function HEMSSimulator.dashboard(
             max_points,
             include = keep,
             colours = active.colours,
-            zero_colour = active.muted,
+            zero_colour = _c(active.muted),
         )
         headings[2].text[] =
             length(plan_names) > 1 ?
@@ -932,6 +980,20 @@ function HEMSSimulator.dashboard(
         card_values[3].text[] = "$(round(window.pv; digits = 1)) kWh"
         card_values[4].text[] = "€$(round(window.cost; digits = 2))"
         window_label.text[] = "$(timestamp(result.grid, first(rows)))  →  $(timestamp(result.grid, last(rows)))"
+
+        money_row = _finance(scenario, candidate, plan)
+        money_values[1].text[] = "€$(round(Int, money_row.spent))"
+        money_values[2].text[] = "€$(round(Int, money_row.saved))"
+        money_values[3].text[] =
+            money_row.npv === nothing ? "—" : "€$(round(Int, money_row.npv))"
+        money_values[4].text[] = if money_row.payback === nothing
+            "—"
+        elseif isfinite(money_row.payback)
+            "$(round(money_row.payback; digits = 1)) yr"
+        else
+            "never"
+        end
+        money_values[5].text[] = string(round(Int, money_row.cycles))
         return nothing
     end
 

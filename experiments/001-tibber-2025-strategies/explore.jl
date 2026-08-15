@@ -34,7 +34,7 @@ grid, weather, prices, load = inputs.grid, inputs.weather, inputs.prices, inputs
 contract = Contract(
     grid;
     commodity = prices .+ MARKUP,
-    feed_in = prices .+ FEED_IN_ADDER,
+    feed_in = feed_in_price(prices),
     energy_tax = ENERGY_TAX,
     net_metering_fraction = 0.0,
     grid = FixedCapacityTariff(),
@@ -60,6 +60,11 @@ app = dashboard(
     [Battery(kwh, kwh / 2; degradation_cost = DEGRADATION) for kwh in CAPACITIES];
     options = OPTIONS(EconomicStrategy()),
     strategies = STRATEGIES,
+    investment = b -> Investment(
+        capex = CAPEX(b.capacity_kwh),
+        lifetime_years = 15,
+        discount_rate = 0.04,
+    ),
 )
 
 display(app.figure)
