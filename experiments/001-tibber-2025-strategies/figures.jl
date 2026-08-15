@@ -1,10 +1,10 @@
 # Figures for experiment 001, drawn from the CSVs `run.jl` wrote.
 #
-#     julia --project=@plotenv experiments/001-tibber-2025-strategies/figures.jl
+#     julia --project=examples experiments/001-tibber-2025-strategies/figures.jl
 #
-# Reads `results/`, writes `results/*.png`. Runs in seconds, so a figure can be reworked as often as
-# it needs without re-solving a year — which is the whole reason simulation and plotting are
-# separate steps.
+# Reads `data/`, writes `figures/`. Runs in a minute, so a figure can be reworked as often as it
+# needs without re-solving a year — the whole reason simulation and plotting are separate steps.
+# It needs no ENTSO-E token: everything it reads is already on disk.
 
 using CSV
 using DataFrames
@@ -16,9 +16,10 @@ using HEMSSimulator: ASSET_COLOURS
 GLMakie.activate!(; visible = false)
 
 include(joinpath(@__DIR__, "..", "common.jl"))
-const OUT = results_dir(@__FILE__)
+const DATA = data_dir(@__FILE__)
+const FIGS = figures_dir(@__FILE__)
 
-read_table(name) = CSV.read(joinpath(OUT, name * ".csv"), DataFrame)
+table(name) = read_table(DATA, name)
 colour(series) = get(
     Dict(
         "PV" => ASSET_COLOURS.pv,
@@ -40,14 +41,20 @@ colour(series) = get(
 # ---------------------------------------------------------------------------------------------
 # KPI curves against battery capacity, one line per strategy.
 
-comparison = read_table("comparison")
+comparison = table("comparison")
 
 function kpi_figure(column, ylabel, title)
     figure = Figure(size = (760, 420))
     axis = Axis(figure[1, 1]; title, xlabel = "battery capacity, kWh", ylabel)
     for name in unique(comparison.strategy)
         block = comparison[comparison.strategy .== name, :]
-        lines!(axis, block.capacity_kwh, block[!, column]; label = string(name), linewidth = 2)
+        lines!(
+            axis,
+            block.capacity_kwh,
+            block[!, column];
+            label = string(name),
+            linewidth = 2,
+        )
         scatter!(axis, block.capacity_kwh, block[!, column]; markersize = 9)
     end
     column === :npv && hlines!(axis, [0.0]; color = (:black, 0.3), linewidth = 0.8)
@@ -63,7 +70,7 @@ for (column, ylabel, title) in (
     (:cycles_per_year, "full equivalent cycles/year", "Battery cycling"),
     (:self_sufficiency, "fraction", "Self-sufficiency"),
 )
-    save_figure(OUT, string(column), kpi_figure(column, ylabel, title))
+    save_figure(FIGS, string(column), kpi_figure(column, ylabel, title))
 end
 
 # The trade the two strategies make, on one pair of axes: money given up against grid energy saved.
@@ -76,7 +83,13 @@ let figure = Figure(size = (620, 460))
     )
     for name in unique(comparison.strategy)
         block = comparison[comparison.strategy .== name, :]
-        lines!(axis, block.annual_savings, block.imported_kwh; label = string(name), linewidth = 2)
+        lines!(
+            axis,
+            block.annual_savings,
+            block.imported_kwh;
+            label = string(name),
+            linewidth = 2,
+        )
         scatter!(axis, block.annual_savings, block.imported_kwh; markersize = 9)
         for row in eachrow(block)
             text!(
@@ -91,7 +104,7 @@ let figure = Figure(size = (620, 460))
         end
     end
     axislegend(axis; framevisible = false)
-    save_figure(OUT, "trade-off", figure)
+    save_figure(FIGS, "trade-off", figure)
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -109,14 +122,18 @@ function dispatch_figure(flows, title)
     for (direction, sign) in ((:source, 1), (:sink, -1))
         running = nothing
         for name in unique(flows[flows.direction .== string(direction), :series])
-            block = flows[(flows.direction .== string(direction)) .& (flows.series .== name), :]
+            block =
+                flows[(flows.direction .== string(direction)) .& (flows.series .== name), :]
             running = running === nothing ? zeros(nrow(block)) : running
             lower = copy(running)
             running = running .+ block.kw
             push!(
                 handles,
                 band!(
-                    axis, block.hour, sign .* lower, sign .* running;
+                    axis,
+                    block.hour,
+                    sign .* lower,
+                    sign .* running;
                     color = (colour(name), 0.85),
                 ),
             )
@@ -137,8 +154,11 @@ function state_figure(states, title)
         axis = Axis(figure[row, 1]; ylabel = name)
         if !all(ismissing, block.band_lower)
             band!(
-                axis, block.hour, collect(Float64, block.band_lower),
-                collect(Float64, block.band_upper); color = (:grey, 0.18),
+                axis,
+                block.hour,
+                collect(Float64, block.band_lower),
+                collect(Float64, block.band_upper);
+                color = (:grey, 0.18),
             )
         end
         for bound in (first(block.lower), first(block.upper))
@@ -146,14 +166,21 @@ function state_figure(states, title)
             hlines!(axis, [bound]; color = (:black, 0.35), linestyle = :dash, linewidth = 1)
         end
         any(block.away) && band!(
-            axis, block.hour, zeros(nrow(block)),
-            [a ? maximum(block.value) : 0.0 for a in block.away]; color = (:grey, 0.10),
+            axis,
+            block.hour,
+            zeros(nrow(block)),
+            [a ? maximum(block.value) : 0.0 for a in block.away];
+            color = (:grey, 0.10),
         )
         lines!(axis, block.hour, block.value; linewidth = 1.6)
         marks = block[.!ismissing.(block.target), :]
         nrow(marks) == 0 || scatter!(
-            axis, marks.hour, collect(Float64, marks.target);
-            color = :black, marker = :hline, markersize = 14,
+            axis,
+            marks.hour,
+            collect(Float64, marks.target);
+            color = :black,
+            marker = :hline,
+            markersize = 14,
         )
         row == length(panels) || (axis.xticklabelsvisible = false)
         push!(axes, axis)
@@ -164,11 +191,11 @@ function state_figure(states, title)
     return figure
 end
 
-for file in readdir(OUT)
+for file in readdir(DATA)
     startswith(file, "flows-") && endswith(file, ".csv") || continue
     stem = replace(file, "flows-" => "", ".csv" => "")
-    save_figure(OUT, "dispatch-$stem", dispatch_figure(read_table("flows-$stem"), stem))
-    save_figure(OUT, "state-$stem", state_figure(read_table("states-$stem"), stem))
+    save_figure(FIGS, "dispatch-$stem", dispatch_figure(table("flows-$stem"), stem))
+    save_figure(FIGS, "state-$stem", state_figure(table("states-$stem"), stem))
 end
 
 println("figures done")

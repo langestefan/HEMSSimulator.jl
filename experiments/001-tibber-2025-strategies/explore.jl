@@ -1,6 +1,6 @@
 # The same study as `run.jl`, opened in the interactive dashboard instead of written to disk.
 #
-#     julia --project=@plotenv -t auto experiments/001-tibber-2025-strategies/explore.jl
+#     julia --project=examples -t auto experiments/001-tibber-2025-strategies/explore.jl
 #
 # Needs GLMakie and a display, and ENV["ENTSOE_API_TOKEN"]. The downloads are the same cached ones
 # `run.jl` used, so this starts quickly if that has been run.
@@ -35,15 +35,13 @@ contract = Contract(
 home = HomeSystem(
     site = SITE,
     pv = PV,
-    assets = AbstractAsset[
-        ElectricVehicle(
-            YEAR;
-            capacity_kwh = 60.0,
-            charge_power_kw = 11.0,
-            kwh_per_day = EV_KWH_PER_WORKDAY,
-            weekdays_only = true,
-        ),
-    ],
+    assets = AbstractAsset[ElectricVehicle(
+        YEAR;
+        capacity_kwh = 60.0,
+        charge_power_kw = 11.0,
+        kwh_per_day = EV_KWH_PER_WORKDAY,
+        weekdays_only = true,
+    ),],
 )
 
 app = dashboard(
@@ -57,5 +55,7 @@ app = dashboard(
 )
 
 display(app.figure)
-println("dashboard open — first selection of each combination runs a year of solves. Ctrl-C to quit.")
+println(
+    "dashboard open — first selection of each combination runs a year of solves. Ctrl-C to quit.",
+)
 isinteractive() || wait(GLMakie.Screen(app.figure.scene))

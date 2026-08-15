@@ -30,12 +30,13 @@ const DEGRADATION = 0.02                            # EUR/kWh of throughput, dis
 # off deliberately: it exists to stop the horizon emptying storage at a window boundary, but with a
 # 15-minute step that boundary is never implemented, so the credit only makes the optimizer hoard.
 # Measured on a June week: leaving it on costs about 10% of the savings.
-const OPTIONS = (strategy) -> RunOptions(
-    window_hours = 24,
-    step_hours = 0.25,
-    terminal_value = false,
-    strategy = strategy,
-)
+const OPTIONS =
+    (strategy) -> RunOptions(
+        window_hours = 24,
+        step_hours = 0.25,
+        terminal_value = false,
+        strategy = strategy,
+    )
 
 const STRATEGIES = (economic = EconomicStrategy(), green = GreenStrategy())
 

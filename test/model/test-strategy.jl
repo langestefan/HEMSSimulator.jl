@@ -30,7 +30,9 @@ end
     )
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180),
+        ],
         assets = [Battery(10.0, 5.0; degradation_cost = 0.02)],
     )
     run(strategy) = simulate(
@@ -47,8 +49,8 @@ end
     )
 end
 
-@testitem "Green never charges the battery from the grid" tags =
-    [:integration, :slow] setup = [TwoStrategies] begin
+@testitem "Green never charges the battery from the grid" tags = [:integration, :slow] setup =
+    [TwoStrategies] begin
     # Not a rule in the model — a consequence of the objective. Charging from the grid *is* an
     # import, and a round trip loses energy, so it can never avoid as much later import as it costs
     # now. An import-minimising optimizer therefore never does it.
@@ -66,8 +68,8 @@ end
     @test grid_charging(economic) > 0
 end
 
-@testitem "Each strategy wins on its own measure" tags =
-    [:integration, :slow] setup = [TwoStrategies] begin
+@testitem "Each strategy wins on its own measure" tags = [:integration, :slow] setup =
+    [TwoStrategies] begin
     green = TwoStrategies.run(GreenStrategy())
     economic = TwoStrategies.run(EconomicStrategy())
     bill(result) = settle(result, TwoStrategies.contract).total
@@ -81,8 +83,8 @@ end
     @test maximum(abs, balance_residual(economic)) < 1e-9
 end
 
-@testitem "Self-sufficiency flatters the economic strategy" tags =
-    [:integration, :slow] setup = [TwoStrategies] begin
+@testitem "Self-sufficiency flatters the economic strategy" tags = [:integration, :slow] setup =
+    [TwoStrategies] begin
     # A trap worth pinning down. `self_sufficiency` counts battery discharge as on-site supply
     # whatever the battery was charged from, so a controller that buys cheap grid energy at night
     # and discharges it by day scores *higher* than one that never imports to store at all.

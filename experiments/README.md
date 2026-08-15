@@ -11,7 +11,8 @@ experiments/
     run.jl                      simulate -> CSV. No plotting, no Makie.
     figures.jl                  CSV -> PNG. No solving.
     explore.jl                  the same study in the interactive dashboard
-    results/                    CSVs and figures, committed
+    data/                       CSVs, written by run.jl, committed
+    figures/                    PNGs, written by figures.jl, committed
 ```
 
 **Simulating and plotting are separate steps, and that is the important part.** A year at a
@@ -21,7 +22,9 @@ can be fixed without paying for the solver again, and it makes the numbers behin
 committed artifact rather than something trapped inside a plotting call.
 
 `run.jl` therefore never loads Makie and runs on the package environment alone. `figures.jl` needs a
-Makie backend and reads only `results/`, so it works without an ENTSO-E token.
+Makie backend and reads only `data/`, so it works without an ENTSO-E token. Data and figures sit in
+separate directories so it is obvious which files cost half an hour of solver time and which can be
+regenerated in a minute.
 
 Conventions:
 
@@ -31,10 +34,13 @@ Conventions:
   number matters to the answer it is visible at the top of the file, not buried in a default.
 - **Measured data is cached**, so a re-run does not re-download and does not silently drift when
   ERA5 is reanalysed. See `set_cache`.
-- Scripts need a Makie backend and, for the ENTSO-E loader, `ENV["ENTSOE_API_TOKEN"]`.
+- `run.jl` needs `ENV["ENTSOE_API_TOKEN"]`; the other two do not.
 
 ```bash
-julia --project=. -t auto experiments/001-tibber-2025-strategies/run.jl   # ~30 min of solves
-julia --project=@plotenv    experiments/001-tibber-2025-strategies/figures.jl   # ~1 min
-julia --project=@plotenv -t auto experiments/001-tibber-2025-strategies/explore.jl
+# once, to set up the plotting environment
+julia --project=examples -e 'using Pkg; Pkg.instantiate()'
+
+julia --project=.        -t auto experiments/001-tibber-2025-strategies/run.jl      # ~30 min
+julia --project=examples         experiments/001-tibber-2025-strategies/figures.jl  # ~1 min
+julia --project=examples -t auto experiments/001-tibber-2025-strategies/explore.jl  # dashboard
 ```

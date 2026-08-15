@@ -3,7 +3,7 @@
 #
 #     julia --project=. -t auto experiments/001-tibber-2025-strategies/run.jl
 #
-# **Simulation only.** Everything this produces is a CSV in `results/`; not a single plot is drawn,
+# **Simulation only.** Everything this produces is a CSV in `data/`; not a single plot is drawn,
 # and Makie is never loaded — the package environment is enough. Figures are `figures.jl`, which
 # reads those CSVs back, so a figure can be redrawn in seconds without re-solving a year and an
 # hour of solver time is never hostage to a typo in an axis label.
@@ -18,7 +18,7 @@ using Statistics: mean
 
 include(joinpath(@__DIR__, "..", "common.jl"))
 include(joinpath(@__DIR__, "run-config.jl"))
-const OUT = results_dir(@__FILE__)
+const DATA = data_dir(@__FILE__)
 
 # ---------------------------------------------------------------------------------------------
 
@@ -34,10 +34,14 @@ println(
     count(<(0), prices),
     " negative quarter-hours",
 )
-println("  irradiation ", round(sum(weather.ghi) * hours(YEAR) / 1000, digits = 1), " kWh/m2")
+println(
+    "  irradiation ",
+    round(sum(weather.ghi) * hours(YEAR) / 1000, digits = 1),
+    " kWh/m2",
+)
 
 save_table(
-    OUT,
+    DATA,
     "inputs",
     DataFrame(
         timestamp = timestamps(YEAR),
@@ -63,23 +67,18 @@ contract = Contract(
 home = HomeSystem(
     site = SITE,
     pv = PV,
-    assets = AbstractAsset[
-        ElectricVehicle(
-            YEAR;
-            capacity_kwh = 60.0,
-            charge_power_kw = 11.0,
-            kwh_per_day = EV_KWH_PER_WORKDAY,
-            weekdays_only = true,
-        ),
-    ],
+    assets = AbstractAsset[ElectricVehicle(
+        YEAR;
+        capacity_kwh = 60.0,
+        charge_power_kw = 11.0,
+        kwh_per_day = EV_KWH_PER_WORKDAY,
+        weekdays_only = true,
+    ),],
 )
 candidates = [Battery(kwh, kwh / 2; degradation_cost = DEGRADATION) for kwh in CAPACITIES]
 investment =
-    b -> Investment(
-        capex = CAPEX(b.capacity_kwh),
-        lifetime_years = 15,
-        discount_rate = 0.04,
-    )
+    b ->
+        Investment(capex = CAPEX(b.capacity_kwh), lifetime_years = 15, discount_rate = 0.04)
 
 # ---------------------------------------------------------------------------------------------
 # The sweep: one row per candidate per strategy.
@@ -106,11 +105,11 @@ for (name, strategy) in pairs(STRATEGIES)
     )
     println("  ", round(elapsed / 60, digits = 1), " min")
     insertcols!(table, 1, :strategy => fill(name, nrow(table)))
-    save_table(OUT, "sweep-$(name)", table)
+    save_table(DATA, "sweep-$(name)", table)
     push!(tables, table)
 end
 comparison = reduce(vcat, tables)
-save_table(OUT, "comparison", comparison)
+save_table(DATA, "comparison", comparison)
 
 # ---------------------------------------------------------------------------------------------
 # The reference home at one battery size, kept in detail so the figures have something to draw and
@@ -141,7 +140,13 @@ for (name, strategy) in pairs(STRATEGIES)
     bill = settle(bare, contract)
     push!(
         baselines,
-        (name, bill.imported_kwh, bill.exported_kwh, annualise(bill), self_sufficiency(bare)),
+        (
+            name,
+            bill.imported_kwh,
+            bill.exported_kwh,
+            annualise(bill),
+            self_sufficiency(bare),
+        ),
     )
 
     result = simulate(reference, weather, load, contract; options)
@@ -149,8 +154,8 @@ for (name, strategy) in pairs(STRATEGIES)
     # Window data for the figures, in the long form `flow_table` and `state_table` produce. Three
     # days is what a dispatch plot can show; a year of 15-minute flows would be a CSV nobody reads.
     for (label, day) in WINDOWS
-        save_table(OUT, "flows-$(label)-$(name)", flow_table(result; days = day:(day+2)))
-        save_table(OUT, "states-$(label)-$(name)", state_table(result; days = day:(day+2)))
+        save_table(DATA, "flows-$(label)-$(name)", flow_table(result; days = day:(day+2)))
+        save_table(DATA, "states-$(label)-$(name)", state_table(result; days = day:(day+2)))
     end
 
     # 2025 had thousands of negative quarter-hours, and at a negative retail price it becomes
@@ -168,14 +173,14 @@ for (name, strategy) in pairs(STRATEGIES)
 
     itemised = bill_components(settle(result, contract))
     save_table(
-        OUT,
+        DATA,
         "bill-$(name)",
         DataFrame(component = first.(itemised), eur = last.(itemised)),
     )
 end
 
-save_table(OUT, "baselines", baselines)
-save_table(OUT, "degeneracy-audit", audit)
+save_table(DATA, "baselines", baselines)
+save_table(DATA, "degeneracy-audit", audit)
 
 println("\nsimultaneous import and export, a flow a meter cannot produce:")
 println(audit)
