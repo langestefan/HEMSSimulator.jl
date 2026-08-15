@@ -40,17 +40,7 @@ println(
     " kWh/m2",
 )
 
-save_table(
-    DATA,
-    "inputs",
-    DataFrame(
-        timestamp = timestamps(YEAR),
-        day_ahead_eur_kwh = prices,
-        load_kw = load,
-        ghi_w_m2 = weather.ghi,
-        t_amb_c = weather.t_amb,
-    ),
-)
+save_inputs(DATA, YEAR, weather, prices, load)
 
 # No net metering, flat capacity tariff — the regime the Netherlands is moving to.
 contract = Contract(

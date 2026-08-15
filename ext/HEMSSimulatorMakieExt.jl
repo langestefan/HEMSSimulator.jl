@@ -446,6 +446,19 @@ function HEMSSimulator.dashboard(
     Label(right[1, 1, Top()], "scenario"; halign = :left, padding = (0, 0, 4, 0))
     Label(right[2, 1, Top()], "battery"; halign = :left, padding = (0, 0, 4, 0))
 
+    # Only worth a menu when there is a choice to make, so the row below it moves.
+    strategy_menu = if length(plan_names) > 1
+        Label(right[3, 1, Top()], "strategy"; halign = :left, padding = (0, 0, 4, 0))
+        Menu(
+            right[3, 1];
+            options = string.(plan_names),
+            default = string(first(plan_names)),
+        )
+    else
+        nothing
+    end
+    next_row = strategy_menu === nothing ? 3 : 4
+
     series = flow_series(initial)
     labels = vcat(first.(series.sources), first.(series.sinks))
     toggles = [Toggle(figure; active = true) for _ in labels]
@@ -468,7 +481,12 @@ function HEMSSimulator.dashboard(
             string.(scenario_names),
         )]
         candidate = findfirst(==(battery_menu.selection[]), battery_labels)
-        result = simulation(scenario, candidate)
+        plan = if strategy_menu === nothing
+            first(plan_names)
+        else
+            plan_names[findfirst(==(strategy_menu.selection[]), string.(plan_names))]
+        end
+        result = simulation(scenario, candidate, plan)
 
         first_day = sliders.sliders[1].value[]
         span = sliders.sliders[2].value[]

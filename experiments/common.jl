@@ -7,6 +7,8 @@
 
 using CSV: CSV
 using DataFrames: DataFrame
+using Dates: Dates, Minute
+using HEMSSimulator: TimeGrid, Weather, timestamps
 
 """
     data_dir(script) -> String
@@ -62,4 +64,58 @@ function save_figure(dir::AbstractString, name::AbstractString, figure)
     save(path, figure)
     println("  wrote ", relpath(path))
     return path
+end
+
+"""
+    save_inputs(dir, grid, weather, prices, load) -> String
+
+Write every exogenous series a study consumed to `inputs.csv`, in full.
+
+"In full" is the point. A study's other scripts must be able to rebuild the *exact* run without a
+network or an API token — so this saves all five weather columns, not the two that happen to be
+interesting to look at. Saving GHI alone makes the file readable and the run irreproducible.
+"""
+save_inputs(dir::AbstractString, grid, weather, prices, load) = save_table(
+    dir,
+    "inputs",
+    DataFrame(
+        timestamp = timestamps(grid),
+        day_ahead_eur_kwh = prices,
+        load_kw = load,
+        ghi_w_m2 = weather.ghi,
+        dni_w_m2 = weather.dni,
+        dhi_w_m2 = weather.dhi,
+        t_amb_c = weather.t_amb,
+        wind_m_s = weather.wind,
+    ),
+)
+
+"""
+    load_inputs(dir) -> (; grid, weather, prices, load)
+
+Rebuild what [`save_inputs`](@ref) wrote. No network, no credentials — everything a plotting or
+exploration script needs is already on disk.
+"""
+function load_inputs(dir::AbstractString)
+    table = read_table(dir, "inputs")
+    stamps = table.timestamp
+    grid = TimeGrid(
+        first(stamps),
+        Minute(Dates.value(Minute(stamps[2] - stamps[1]))),
+        length(stamps),
+    )
+    weather = Weather(
+        grid;
+        ghi = table.ghi_w_m2,
+        dni = table.dni_w_m2,
+        dhi = table.dhi_w_m2,
+        t_amb = table.t_amb_c,
+        wind = table.wind_m_s,
+    )
+    return (;
+        grid,
+        weather,
+        prices = collect(Float64, table.day_ahead_eur_kwh),
+        load = collect(Float64, table.load_kw),
+    )
 end

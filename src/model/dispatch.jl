@@ -76,7 +76,7 @@ function build_window(system::HomeSystem, ctx::DispatchContext, states)
 end
 
 """
-    solve_window(system::HomeSystem, ctx::DispatchContext, states) -> (vars, model)
+    solve_window(system::HomeSystem, ctx::DispatchContext, states) -> (vars, model, degeneracy)
 
 Build and solve one window, throwing if the solver does not reach a feasible optimum.
 
@@ -104,35 +104,35 @@ function solve_window(system::HomeSystem, ctx::DispatchContext, states)
         "dispatch window starting at interval $(ctx.offset) did not solve: " *
         "$(termination_status(model))",
     )
-    ctx.options.check_degeneracy && check_degeneracy(system, vars, ctx)
-    return vars, model
+    degeneracy =
+        ctx.options.check_degeneracy ? check_degeneracy(system, vars, ctx) :
+        (; meter = 0, assets = 0)
+    return vars, model, degeneracy
 end
 
 """
-    check_degeneracy(system, vars, ctx)
+    check_degeneracy(system, vars, ctx) -> (; meter, assets)
 
-Warn if the solved window simultaneously imports and exports, or simultaneously charges and
-discharges an asset. See the note on [`solve_window`](@ref).
+Count the intervals of a solved window that simultaneously import and export, or simultaneously
+charge and discharge an asset. See the note on [`solve_window`](@ref).
+
+It counts rather than warns because [`simulate`](@ref) calls it once per window, and a year at a
+15-minute control step is 35 040 windows — warning from here buried a real finding under tens of
+thousands of identical messages. The driver sums these and reports once.
 """
 function check_degeneracy(system::HomeSystem, vars, ctx::DispatchContext)
     tol = 1.0e-6
-    both = findall(
+    meter = count(
         k -> value(vars.imported[k]) > tol && value(vars.exported[k]) > tol,
         1:ctx.grid.n,
     )
-    isempty(both) ||
-        @warn "solution imports and exports in the same interval; enable RunOptions.exclusive" window_offset =
-            ctx.offset intervals = first(both, 5) count = length(both)
-    for (asset, avars) in zip(system.assets, vars.assets)
+    assets = 0
+    for (_, avars) in zip(system.assets, vars.assets)
         haskey(avars, :charge) && haskey(avars, :discharge) || continue
-        clash = findall(
+        assets += count(
             k -> value(avars.charge[k]) > tol && value(avars.discharge[k]) > tol,
             1:ctx.grid.n,
         )
-        isempty(clash) ||
-            @warn "asset charges and discharges in the same interval; enable RunOptions.exclusive" asset =
-                typeof(asset) window_offset = ctx.offset intervals = first(clash, 5) count =
-                length(clash)
     end
-    return nothing
+    return (; meter, assets)
 end

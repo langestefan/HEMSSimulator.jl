@@ -2,8 +2,9 @@
 #
 #     julia --project=examples -t auto experiments/001-tibber-2025-strategies/explore.jl
 #
-# Needs GLMakie and a display, and ENV["ENTSOE_API_TOKEN"]. The downloads are the same cached ones
-# `run.jl` used, so this starts quickly if that has been run.
+# Needs GLMakie and a display. It does **not** need a network or an ENTSO-E token: every input
+# comes from `data/inputs.csv`, which `run.jl` wrote — so this explores exactly the run that
+# produced the committed results, not a fresh download that might differ.
 #
 # The strategy menu is the point: pick a battery, then flip between economic and green on the same
 # week and watch the dispatch stack change. The economic controller charges from the grid overnight;
@@ -17,14 +18,14 @@ using HEMSSimulator
 using GLMakie
 using Dates
 
+include(joinpath(@__DIR__, "..", "common.jl"))
 include(joinpath(@__DIR__, "run-config.jl"))
 
-weather = openmeteo_weather(SITE, YEAR)
-prices = entsoe_prices(YEAR)
-load = synthetic_load(YEAR; annual_kwh = HOUSEHOLD_KWH)
+inputs = load_inputs(data_dir(@__FILE__))
+grid, weather, prices, load = inputs.grid, inputs.weather, inputs.prices, inputs.load
 
 contract = Contract(
-    YEAR;
+    grid;
     commodity = prices .+ MARKUP,
     feed_in = FEED_IN,
     energy_tax = ENERGY_TAX,

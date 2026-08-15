@@ -52,6 +52,8 @@ function simulate(
     first_interval = 1
     windows = 0
     solve_time = 0.0
+    meter_clashes = 0
+    asset_clashes = 0
     while first_interval <= grid.n
         remaining = grid.n - first_interval + 1
         len = min(window_len, remaining)
@@ -63,9 +65,11 @@ function simulate(
             options,
             first_interval,
         )
-        vars, model = solve_window(system, ctx, states)
+        vars, model, degeneracy = solve_window(system, ctx, states)
         solve_time += JuMP.solve_time(model)
         windows += 1
+        meter_clashes += degeneracy.meter
+        asset_clashes += degeneracy.assets
 
         rows = first_interval:(first_interval+implemented-1)
         frame.import_kw[rows] .= value.(vars.imported[1:implemented])
@@ -90,6 +94,15 @@ function simulate(
             (asset, avars) in zip(system.assets, vars.assets)
         ]
         first_interval += implemented
+    end
+
+    # One report for the whole run, not one per window: at a 15-minute control step a year is
+    # 35 040 windows, and warning from each of them buries the finding it is trying to surface.
+    if meter_clashes > 0 || asset_clashes > 0
+        @warn "the solution imports and exports, or charges and discharges, in the same " *
+              "interval; the linear program cannot rule this out under negative prices. " *
+              "Enable RunOptions.exclusive if the affected flows matter." meter_intervals =
+            meter_clashes asset_intervals = asset_clashes windows
     end
 
     for (name, values) in asset_columns
