@@ -425,6 +425,7 @@ function HEMSSimulator.dashboard(
     strategies = nothing,
     width::Integer = 3,
     max_points::Integer = PLOT_MAX_POINTS,
+    precompute::Bool = true,
     size = (1500, 900),
 )
     regimes = contracts isa Contract ? (; contract = contracts) : contracts
@@ -432,24 +433,49 @@ function HEMSSimulator.dashboard(
     isempty(candidates) && throw(ArgumentError("give at least one candidate asset"))
     grid = weather.grid
     days = cld(grid.n, intervals_per_day(grid))
-
-    # One simulation per (scenario, candidate, strategy), computed the first time it is asked for.
-    # Scrubbing the window never triggers one; changing a menu does, once.
-    cache = Dict{Tuple{Symbol,Int,Symbol},SimulationResult}()
-    function simulation(scenario::Symbol, candidate::Int, plan::Symbol)
-        return get!(cache, (scenario, candidate, plan)) do
-            simulate(
-                with_assets(system, vcat(system.assets, [candidates[candidate]])),
-                weather,
-                load_kw,
-                regimes[scenario];
-                options = _with_strategy(options, plans[plan]),
-            )
-        end
-    end
-
     scenario_names = collect(keys(regimes))
     plan_names = collect(keys(plans))
+
+    _run(scenario::Symbol, candidate::Int, plan::Symbol; progress = nothing) = simulate(
+        with_assets(system, vcat(system.assets, [candidates[candidate]])),
+        weather,
+        load_kw,
+        regimes[scenario];
+        options = _with_strategy(options, plans[plan]),
+        progress,
+    )
+
+    # One simulation per (scenario, candidate, strategy).
+    cache = Dict{Tuple{Symbol,Int,Symbol},SimulationResult}()
+    simulation(scenario::Symbol, candidate::Int, plan::Symbol) =
+        get!(() -> _run(scenario, candidate, plan), cache, (scenario, candidate, plan))
+
+    # Every combination up front rather than one per click, and threaded like `sweep`. Solving on
+    # demand looks cheaper, but the solve runs *inside the menu's event callback*: a year is 35 040
+    # solves and some minutes, and for all of them GLMakie processes no events, so the window goes
+    # unresponsive and the desktop offers to kill it. That is not slowness, it is a crash. Paying the
+    # cost once, before the window exists, makes every interaction afterwards instant.
+    if precompute
+        combos = [
+            (scenario, candidate, plan) for scenario in scenario_names for
+            candidate in eachindex(candidates) for plan in plan_names
+        ]
+        # One bar over *windows*, not over combinations. With more threads than combinations they all
+        # run at once and finish together, so a combination-level bar would sit at zero for the whole
+        # wait and then jump to done — precisely the shape that tells you nothing.
+        per_combo = cld(grid.n, max(1, round(Int, options.step_hours / hours(grid))))
+        bar = ProgressBar(
+            length(combos) * per_combo;
+            label = "simulating $(length(combos)) combination(s) on $(Threads.nthreads()) thread(s)",
+        )
+        computed = Vector{SimulationResult}(undef, length(combos))
+        Threads.@threads for k in eachindex(combos)
+            computed[k] = _run(combos[k]...; progress = (_, _) -> step!(bar))
+        end
+        for (k, combo) in enumerate(combos)
+            cache[combo] = computed[k]
+        end
+    end
     battery_labels = [
         c isa Battery ? string(c.capacity_kwh, " kWh") : string(nameof(typeof(c)), " ", i) for (i, c) in enumerate(candidates)
     ]

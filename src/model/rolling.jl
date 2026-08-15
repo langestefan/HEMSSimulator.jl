@@ -10,6 +10,11 @@ That overlap is what stops the optimizer from emptying the battery at every boun
 structure a forecast model later plugs into — replacing perfect foresight means substituting the
 data sliced into each window, not changing this loop.
 
+`progress`, if given, is called after every window as `progress(done, total)`. A year at a
+15-minute control step is 35 040 windows and several minutes, so anything with a person waiting on it
+needs a way to say how far along it is; see [`ProgressBar`](@ref). It is called from inside the loop,
+once per window, so keep it cheap — the cost lands on the simulation.
+
 # Examples
 
 ```julia
@@ -22,6 +27,7 @@ function simulate(
     system::HomeSystem,
     inputs::SimulationInputs;
     options::RunOptions = RunOptions(),
+    progress = nothing,
 )
     grid = inputs.grid
     dt = hours(grid)
@@ -49,6 +55,8 @@ function simulate(
     column_names = [Dict{Symbol,Symbol}() for _ in system.assets]
 
     states = [initial_state(asset) for asset in system.assets]
+    # Known before the loop, because the step is fixed: the last window is short, not extra.
+    total_windows = cld(grid.n, step_len)
     first_interval = 1
     windows = 0
     solve_time = 0.0
@@ -68,6 +76,7 @@ function simulate(
         vars, model, degeneracy = solve_window(system, ctx, states)
         solve_time += JuMP.solve_time(model)
         windows += 1
+        progress === nothing || progress(windows, total_windows)
         meter_clashes += degeneracy.meter
         asset_clashes += degeneracy.assets
 
@@ -130,7 +139,8 @@ function simulate(
     load_kw::AbstractVector,
     contract::Contract;
     options::RunOptions = RunOptions(),
+    progress = nothing,
 )
     inputs = prepare(system, weather, load_kw, contract; options)
-    return simulate(system, inputs; options)
+    return simulate(system, inputs; options, progress)
 end

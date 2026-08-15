@@ -10,9 +10,11 @@
 # week and watch the dispatch stack change. The economic controller charges from the grid overnight;
 # the green one never does, because importing to store can only add to the import it is minimising.
 #
-# Each (scenario, battery, strategy) combination simulates once on first selection and is then
-# cached, so the first click on a new combination costs a few minutes of solves and every later one
-# is instant. Scrubbing the window is always free.
+# All ten (scenario, battery, strategy) combinations are simulated before the window opens, threaded
+# — so **start Julia with `-t auto`**, or they run one at a time. That is several minutes of staring
+# at a terminal, and it is the right trade: a solve started from a menu click would run on the thread
+# that draws, freezing the window until it finished. Once the window is up, every menu and every
+# slider is instant.
 
 using HEMSSimulator
 using GLMakie

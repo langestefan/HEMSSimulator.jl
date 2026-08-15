@@ -661,8 +661,8 @@ backend the figure still builds, but nothing responds.
 # Controls
 
   - **day** and **width** sliders move the window over the horizon. Free — no resimulation.
-  - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Each
-    combination is simulated once, on first selection, and cached; a month is seconds, a year a few.
+  - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Every
+    combination is simulated *before the window opens* — see `precompute` — so switching is instant.
   - **toggles** filter the dispatch stack. State panels always show every asset.
   - a **KPI block** recomputed for the visible window: energy in and out, self-consumption, and what
     that window cost at the dispatch price.
@@ -675,6 +675,11 @@ backend the figure still builds, but nothing responds.
   - `strategies`: a `NamedTuple` of [`AbstractStrategy`](@ref) to offer, or `nothing` to use only
     the one already in `options`. Strategy lives in [`RunOptions`](@ref) rather than in the
     contract, so it needs its own menu to be comparable side by side.
+  - `precompute = true`: simulate every scenario × candidate × strategy up front, threaded, before
+    the window opens. **Do not turn this off for a long horizon.** Solving on first selection sounds
+    cheaper, but the solve runs inside the menu's event callback: for however long it takes, GLMakie
+    handles no events, the window is unresponsive, and the desktop offers to force-quit it. A year is
+    35 040 solves per combination. Start Julia with `-t auto` or the combinations run one at a time.
 
 The drawing is the same `dispatch_plot!` and `state_plot!` the static figures use, redrawn on
 change rather than rebuilt around observables — one drawing path, two front ends, so the

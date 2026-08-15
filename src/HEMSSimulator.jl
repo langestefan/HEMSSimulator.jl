@@ -75,6 +75,7 @@ using Statistics: median
 include("core/timegrid.jl")     # the uniform 15-minute grid everything is aligned to
 include("core/resample.jl")     # putting a source series on that grid
 include("core/types.jl")        # asset contract, run options, dispatch context, constants
+include("core/progress.jl")     # terminal progress bar for the long-running simulations
 
 include("solar/weather.jl")     # site, weather series, GHI decomposition
 include("solar/irradiance.jl")  # angle of incidence, transposition, clear-sky reference
@@ -115,6 +116,7 @@ __init__() = _register_plot_hint()
 
 # Time and weather
 export TimeGrid, Site, Weather
+export ProgressBar, step!
 export hours,
     timestamps, timestamp, window, intervals_per_day, extraterrestrial, decompose, Erbs
 

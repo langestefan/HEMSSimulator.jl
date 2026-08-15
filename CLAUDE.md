@@ -316,7 +316,13 @@ Four design points worth not undoing:
 change** rather than being rebuilt around observables, so the interactive view and the static
 figures share one drawing path and cannot drift. Its toggles filter the dispatch stack only — the
 state panels always show every asset, because collapsing rows in a Makie `GridLayout` is fragile and
-the stack is what actually becomes unreadable. Simulations are cached per (scenario, candidate).
+the stack is what actually becomes unreadable.
+
+**Every combination is simulated before the window opens, threaded, not on first selection.** This
+looks like the wasteful choice and is not: a menu callback runs on the thread that draws, so a solve
+started from a click freezes GLMakie for its whole duration. At a year per combination that is
+minutes of an unresponsive window, and the desktop offers to force-quit it — the user sees a crash,
+not a wait. `precompute = false` restores the lazy behaviour for horizons short enough not to matter.
 
 The backend matters for the dashboard and not for the figures: **GLMakie** opens a window and
 handles events, and needs a GPU and a display. CairoMakie still renders every static plot, so a
