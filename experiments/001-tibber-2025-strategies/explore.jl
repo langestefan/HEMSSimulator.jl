@@ -60,11 +60,7 @@ app = dashboard(
     [Battery(kwh, kwh / 2; degradation_cost = DEGRADATION) for kwh in CAPACITIES];
     options = OPTIONS(EconomicStrategy()),
     strategies = STRATEGIES,
-    investment = b -> Investment(
-        capex = CAPEX(b.capacity_kwh),
-        lifetime_years = 15,
-        discount_rate = 0.04,
-    ),
+    investment = INVESTMENT,
 )
 
 display(app.figure)

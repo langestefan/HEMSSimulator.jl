@@ -16,6 +16,9 @@ using HEMSSimulator: ASSET_COLOURS, series_colour, time_ticks
 GLMakie.activate!(; visible = false)
 
 include(joinpath(@__DIR__, "..", "common.jl"))
+# The config too, for the one thing a CSV cannot carry: what the NPV column was discounted at. A
+# figure captioned "Net present value" is misleading out of context when the rate is zero.
+include(joinpath(@__DIR__, "run-config.jl"))
 const DATA = data_dir(@__FILE__)
 const FIGS = figures_dir(@__FILE__)
 
@@ -97,7 +100,11 @@ for (column, ylabel, title) in (
     (:annual_savings, "EUR/year", "Annual savings"),
     (:savings_per_kwh, "EUR/year per kWh installed", "Savings per kWh of battery"),
     (:imported_kwh, "kWh/year", "Energy taken from the grid"),
-    (:npv, "EUR", "Net present value"),
+    (
+        :npv,
+        "EUR",
+        "Net present value over $(LIFETIME_YEARS) years, $(round(Int, 100DISCOUNT_RATE))% real discount",
+    ),
     (:cycles_per_year, "full equivalent cycles/year", "Battery cycling"),
     (:self_sufficiency, "fraction", "Self-sufficiency"),
 )

@@ -50,6 +50,27 @@ const CAPACITIES = [2.5, 5.0, 7.5, 10.0, 15.0]
 const CAPEX = capacity -> 400 + 400 * capacity      # EUR, installed
 const DEGRADATION = 0.02                            # EUR/kWh of throughput, dispatch objective only
 
+# The discount rate is deliberately **zero**. This study asks what the battery saves, not whether the
+# money would have done better somewhere else, so a euro saved in year 15 counts the same as one
+# saved in year 1 and the NPV column reduces to *lifetime saving minus what it cost*. The parameter
+# stays in place rather than being removed: set it to a real (inflation-excluded) rate to turn the
+# same table back into an investment comparison, and `irr` still reports the rate at which the case
+# breaks even whatever this is set to.
+#
+# Zero flatters larger batteries, because their extra saving is spread thinly over all the years
+# while their extra capex lands entirely at year zero. Read the sizing optimum with that in mind.
+const DISCOUNT_RATE = 0.0
+const LIFETIME_YEARS = 15
+
+# One definition for both `run.jl` and `explore.jl`, so the sweep's NPV and the dashboard's NPV card
+# cannot quietly disagree.
+const INVESTMENT =
+    b -> Investment(
+        capex = CAPEX(b.capacity_kwh),
+        lifetime_years = LIFETIME_YEARS,
+        discount_rate = DISCOUNT_RATE,
+    )
+
 # 24 h of perfect foresight, re-optimised every interval — a real MPC controller. Terminal value is
 # off deliberately: it exists to stop the horizon emptying storage at a window boundary, but with a
 # 15-minute step that boundary is never implemented, so the credit only makes the optimizer hoard.
