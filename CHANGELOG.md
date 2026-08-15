@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning].
 - Validation suites: transposition against 72 pinned pvlib-python reference values, and a JET
   analysis asserting no error path is located in this package's own source.
 
+### Removed
+
+- The Documenter site and the `docs/` tree. The deploy never worked without a `DOCUMENTER_KEY` and
+  the reference page was a single `@autodocs` dump; the API is documented in docstrings. The
+  walkthrough survives as `examples/tutorial.jl`, which runs.
+
 ### Changed
 
 - Default `energy_tax` is now the 2025 *energiebelasting* rate of 0.10154 €/kWh; it was the 2024

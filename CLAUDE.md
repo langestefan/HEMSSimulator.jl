@@ -179,14 +179,14 @@ The root `Project.toml` declares a **Julia workspace**:
 
 ```toml
 [workspace]
-projects = ["test", "docs"]
+projects = ["test"]
 ```
 
-`test/` and `docs/` are separate environments that share the root `Manifest.toml`, and each declares
+`test/` is a separate environment sharing the root `Manifest.toml`, and declares
 `[sources] HEMSSimulator = {path = ".."}`. Consequences:
 
-- Never `Pkg.develop` the package into `test`/`docs`; the path source already handles it.
-- Test-only or docs-only dependencies go in `test/Project.toml` / `docs/Project.toml`, not the root.
+- Never `Pkg.develop` the package into `test`; the path source already handles it.
+- Test-only dependencies go in `test/Project.toml`, not the root.
 - `Manifest.toml` is gitignored, so a fresh clone needs `Pkg.instantiate()` once.
 
 ## Commands
@@ -216,11 +216,10 @@ pre-commit run -a          # what the Lint workflow runs (with SKIP=no-commit-to
 lychee --no-progress --config .lychee.toml .    # link check; note the leading dot in the filename
 ```
 
-Docs — serve with live reload:
+The walkthrough is a runnable script rather than a built site (see below):
 
 ```bash
-julia --project=docs -e 'using LiveServer; servedocs()'
-julia --project=docs docs/make.jl               # one-shot build into docs/build/
+julia --project=. examples/tutorial.jl
 ```
 
 ## Testing conventions
@@ -252,14 +251,20 @@ The two `:validation` suites are worth knowing about:
 to the candidate grid, and a home with PV and no storage must self-consume about 30% of what it
 generates. A fortnight annualised can produce almost any optimum; a year cannot.
 
-## Documentation conventions
+## Documentation
 
-`docs/make.jl` builds the page list by **recursively walking `docs/src/`** — every `.md` file is
-included automatically, so no page list needs editing when adding one. But every *subdirectory* (and
-any page wanting a custom title) must have an entry in the `titles` dict in `docs/make.jl`, otherwise
-the build logs `@error "Bad usage: ... does not have a title set"`. Numeric filename prefixes control
-ordering (`90-contributing.md`, `91-developer.md`, `95-reference.md`); `index.md` is always first.
-Public API docstrings surface automatically through `@autodocs` in `docs/src/95-reference.md`.
+There is **no Documenter site**. It was removed: the deploy never worked without a `DOCUMENTER_KEY`,
+and the reference page was a single `@autodocs` dump nobody read. The API is documented in
+docstrings, reachable with `?` in the REPL, and everything narrative lives in one of two places:
+
+- `examples/tutorial.jl` — a runnable walkthrough of the whole package, from a `HomeSystem` through
+  the four scenarios, the sizing sweep and LP bound, to the EV, heat pump and hot water tank. Prose
+  is comments; every number it prints is computed when you run it. Keep it running — it is the only
+  thing that exercises the public API end to end outside the test suite.
+- this file — the design decisions and the traps, which are for whoever is changing the code rather
+  than for whoever is using it.
+
+Do not reintroduce `docs/` without a reason; the removal was deliberate.
 
 ## Style
 
@@ -270,5 +275,4 @@ keep that file as flat `key = value` lines.
 ## Release flow
 
 Version bump in `Project.toml` + `CHANGELOG.md` section rename on a `release-x.y.z` branch, then
-comment `@JuliaRegistrator register` on the merged commit; TagBot creates the tag. Full checklist in
-`docs/src/91-developer.md`.
+comment `@JuliaRegistrator register` on the merged commit; TagBot creates the tag.
