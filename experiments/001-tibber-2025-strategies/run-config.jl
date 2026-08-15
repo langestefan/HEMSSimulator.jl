@@ -62,12 +62,23 @@ const DEGRADATION = 0.02                            # EUR/kWh of throughput, dis
 const DISCOUNT_RATE = 0.0
 const LIFETIME_YEARS = 15
 
+# Calendar life is not the only thing that ends a battery, and in a sizing sweep the two limits pull
+# against each other: a small candidate stores the same daily surplus as a large one, so it cycles
+# far more times *per kWh installed* and wears out sooner. Holding the horizon at 15 years for every
+# candidate therefore flatters exactly the ones that will need replacing first.
+#
+# 6000 full-equivalent cycles is a representative warranty for a home LFP pack. Whether it binds is
+# an output, not an assumption — `lifetime_years` in the sweep table says which candidates were
+# cycle-limited and which ran out of calendar.
+const RATED_CYCLES = 6000.0
+
 # One definition for both `run.jl` and `explore.jl`, so the sweep's NPV and the dashboard's NPV card
 # cannot quietly disagree.
 const INVESTMENT =
     b -> Investment(
         capex = CAPEX(b.capacity_kwh),
         lifetime_years = LIFETIME_YEARS,
+        rated_cycles = RATED_CYCLES,
         discount_rate = DISCOUNT_RATE,
     )
 

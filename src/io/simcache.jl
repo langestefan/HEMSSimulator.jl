@@ -10,11 +10,7 @@ the same dispatch price signal share a cached result and two that do not have di
 The digest walks the structs by *reflection*, not through `show`: this package's `show` methods are
 readable summaries, and a summary that omits a field would let a changed input hit a stale entry.
 """
-function simulation_key(
-    system::HomeSystem,
-    inputs::SimulationInputs,
-    options::RunOptions,
-)
+function simulation_key(system::HomeSystem, inputs::SimulationInputs, options::RunOptions)
     ctx = IOBuffer()
     # A version tag, so a change to what a `SimulationResult` contains invalidates every entry
     # rather than loading a frame that no longer has the columns the caller expects.
@@ -101,8 +97,9 @@ function _store_simulation(key::AbstractString, result::SimulationResult)
     meta = Dict(
         "windows" => result.windows,
         "solve_time" => result.solve_time,
-        "asset_columns" =>
-            [Dict(string(k) => string(v) for (k, v) in d) for d in result.asset_columns],
+        "asset_columns" => [
+            Dict(string(k) => string(v) for (k, v) in d) for d in result.asset_columns
+        ],
     )
     # Write beside the target and rename, so a reader never sees half a file and two threads racing
     # on the same key leave one intact entry rather than a torn one.
@@ -127,9 +124,8 @@ function _load_simulation(key::AbstractString, system::HomeSystem, grid::TimeGri
     # A truncated write, or a grid that somehow disagrees, is a miss rather than a wrong answer.
     nrow(frame) == grid.n || return nothing
     meta = JSON.parsefile(meta_path)
-    asset_columns = [
-        Dict(Symbol(k) => Symbol(v) for (k, v) in d) for d in meta["asset_columns"]
-    ]
+    asset_columns =
+        [Dict(Symbol(k) => Symbol(v) for (k, v) in d) for d in meta["asset_columns"]]
     length(asset_columns) == length(system.assets) || return nothing
     return SimulationResult(
         grid,

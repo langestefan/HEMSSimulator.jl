@@ -153,7 +153,7 @@ export retail_price, export_price, dispatch_prices, Bill, settle, annualise
 export NL_TARIFFS_2025, SCENARIO_NAMES, scenarios, peak_intervals, peak_transport_tariff
 
 # Economics and sizing
-export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year
+export Investment, cashflows, npv, irr, payback, kpis, cycles_per_year, effective_lifetime
 export sweep, best, best_by_scenario, size_lp, capital_recovery_factor
 
 # Resampling

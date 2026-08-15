@@ -103,6 +103,14 @@ as an accounting error — which is exactly how the EV's first draft looked.
   the comfort band.
 - **The COP models clamp to `cop_min = 1.5` by default.** Fine for a heat pump, silently wrong for
   a resistive element — `LinearCOP(reference = 1.0, slope = 0.0)` gives a COP of 1.5, not 1.0.
+- **A battery's lifetime can be set by cycling rather than by the calendar.**
+  `Investment.rated_cycles` (default `Inf`, so this is opt-in) turns `lifetime_years` into a calendar
+  *cap*: `effective_lifetime` takes whichever of the two runs out first, and `kpis` reports which one
+  did. It matters in a sizing sweep because the small candidates store the same daily surplus as the
+  large ones and so cycle far more times *per kWh installed* — a fixed horizon flatters exactly the
+  candidates that would need replacing first. On the 2025 study the observed range is 334 cycles/year
+  at 2.5 kWh down to 229 at 15 kWh, so a rating below about 5000 cycles starts to bind on the small
+  end. At the 6000 of a typical LFP warranty, none of them bind.
 - **`degradation_cost` never reaches the bill.** It is in the dispatch objective, so it shapes how
   hard the optimizer cycles storage, but `settle` knows nothing about it and `sweep`'s savings do
   not pay for it. Wear belongs in `Investment` (`lifetime_years`, `capacity_fade`); charging it in
