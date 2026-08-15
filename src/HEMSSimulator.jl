@@ -155,6 +155,7 @@ export get_cache, set_cache, clear_cache!
 # Plotting (methods require Makie, e.g. `using CairoMakie`)
 export dispatch_plot, dispatch_plot!, state_plot, state_plot!
 export sweep_plot, sweep_plot!, bill_plot, bill_plot!
+export dashboard
 export hems_theme, StatePanel, state_panels, flow_series, bill_components
 export ASSET_COLOURS, interval_range
 

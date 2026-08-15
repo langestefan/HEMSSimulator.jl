@@ -1,6 +1,6 @@
 # Plotting. The functions here are documented stubs; their methods live in
-# `ext/HEMSSimulatorMakieExt.jl` and appear once Makie is loaded — `using CairoMakie` is the usual
-# way. That keeps the Makie stack, by far the heaviest thing this package could depend on, out of a
+# `ext/HEMSSimulatorMakieExt.jl` and appear once Makie is loaded — `using GLMakie` is the usual way,
+# and any other backend works too. That keeps the Makie stack, by far the heaviest thing this package could depend on, out of a
 # plain `using HEMSSimulator`.
 #
 # Everything that does not need Makie lives here rather than in the extension: the colour table, the
@@ -64,7 +64,7 @@ function interval_range(grid::TimeGrid, days)
                 "day $first_day starts at interval $start but the horizon has $total",
             ),
         )
-        return start:min(last_day * per_day, total)
+        return start:min(last_day*per_day, total)
     end
 
     days === nothing && return 1:total
@@ -247,12 +247,12 @@ disagree with the accounting.
 function flow_series(result::SimulationResult)
     frame = result.frame
     sources = Pair{String,Tuple{Vector{Float64},String}}[
-        "PV" => (frame.pv_available_kw .- frame.curtail_kw, ASSET_COLOURS.pv),
-        "import" => (collect(Float64, frame.import_kw), ASSET_COLOURS.var"import"),
+        "PV"=>(frame.pv_available_kw .- frame.curtail_kw, ASSET_COLOURS.pv),
+        "import"=>(collect(Float64, frame.import_kw), ASSET_COLOURS.var"import"),
     ]
     sinks = Pair{String,Tuple{Vector{Float64},String}}[
-        "export" => (collect(Float64, frame.export_kw), ASSET_COLOURS.export_),
-        "curtailed" => (collect(Float64, frame.curtail_kw), ASSET_COLOURS.curtail),
+        "export"=>(collect(Float64, frame.export_kw), ASSET_COLOURS.export_),
+        "curtailed"=>(collect(Float64, frame.curtail_kw), ASSET_COLOURS.curtail),
     ]
 
     for (index, asset) in enumerate(result.system.assets)
@@ -263,7 +263,10 @@ function flow_series(result::SimulationResult)
                 column === nothing && continue
                 values = collect(Float64, frame[!, column])
                 all(iszero, values) && continue
-                push!(into, _flow_label(declared, column) => (values, _flow_colour(declared)))
+                push!(
+                    into,
+                    _flow_label(declared, column) => (values, _flow_colour(declared)),
+                )
             end
         end
     end
@@ -306,7 +309,10 @@ the assets themselves, so this needs no updating when an asset is added.
 year at 15 minutes is 35 136 points and unreadable. A longer window is averaged into blocks so that
 at most `max_points` are drawn, and the axis label says so.
 
-Requires Makie: `using CairoMakie` first.
+`include` restricts the drawn series to those labels — `["PV", "import", "load"]` to strip a
+four-asset stack back to something readable. `nothing`, the default, draws everything.
+
+Requires a Makie backend: `using GLMakie` first.
 """
 function dispatch_plot end
 
@@ -398,6 +404,40 @@ bill_components(bill::Bill) = [
 ]
 
 """
+    dashboard(system, weather, load_kw, contracts, candidates; kwargs...)
+
+An interactive window over a whole study: scrub the time axis, switch regulatory scenario and
+battery size, hide series, and read the numbers for whatever is on screen.
+
+The static plots answer a question you already have. This one is for the questions you do not have
+yet — what the battery is doing in February, why one scenario cycles harder, whether that spike is
+the car or the heat pump.
+
+Needs a Makie backend that can open a window and handle events: **GLMakie**. Under a file-writing
+backend the figure still builds, but nothing responds.
+
+# Controls
+
+  - **day** and **width** sliders move the window over the horizon. Free — no resimulation.
+  - **scenario** and **battery** menus. Each combination is simulated once, on first selection, and
+    cached; a month is seconds, a year a few.
+  - **toggles** filter the dispatch stack. State panels always show every asset.
+  - a **KPI block** recomputed for the visible window: energy in and out, self-consumption, and what
+    that window cost at the dispatch price.
+
+# Arguments
+
+  - `contracts`: a [`Contract`](@ref), or the `NamedTuple` from [`scenarios`](@ref).
+  - `candidates`: the assets to offer in the battery menu. Each is *added* to `system`'s own assets,
+    exactly as [`sweep`](@ref) does, so a home that already has a car keeps it in every view.
+
+The drawing is the same `dispatch_plot!` and `state_plot!` the static figures use, redrawn on
+change rather than rebuilt around observables — one drawing path, two front ends, so the
+interactive view cannot drift away from the figures you put in a report.
+"""
+function dashboard end
+
+"""
     hems_theme() -> Makie.Theme
 
 An opt-in theme: muted grid, no top or right spine, a serif-free stack, and the package's own colour
@@ -412,6 +452,7 @@ function hems_theme end
 # `MethodError` naming a function the user can see is exported. The hint says what is actually
 # missing. Registered in `__init__` because error hints are runtime state, not precompilable.
 const _PLOT_FUNCTIONS = (
+    dashboard,
     dispatch_plot,
     dispatch_plot!,
     state_plot,
@@ -429,7 +470,7 @@ function _register_plot_hint()
         print(
             io,
             "\n\n`$(nameof(exception.f))` is provided by HEMSSimulator's Makie extension. ",
-            "Run `using CairoMakie` (or another Makie backend) and try again.",
+            "Run `using GLMakie` (or another Makie backend) and try again.",
         )
         return nothing
     end

@@ -74,6 +74,10 @@ and this project adheres to [Semantic Versioning].
   `hems_theme`. Makie is a weak dependency, so `using HEMSSimulator` stays fast; `using CairoMakie`
   brings the methods in. `examples/plots.jl` renders all of them.
 
+- `dashboard`: an interactive window over a whole study — a scrubbable time axis, scenario and
+  battery menus that simulate on demand and cache, toggles over the dispatch stack, and a KPI
+  readout for the visible window. Needs GLMakie.
+
 ### Removed
 
 - The Documenter site and the `docs/` tree. The deploy never worked without a `DOCUMENTER_KEY` and

@@ -2,7 +2,7 @@
     HEMSSimulatorMakieExt
 
 Methods for the plotting functions declared in `src/plots.jl`, loaded when Makie is — `using
-CairoMakie` being the usual way in.
+GLMakie` being the usual way in, though any Makie backend works.
 
 Everything here is drawing. The window arithmetic, the colour table and the per-asset descriptions
 of what a state panel contains all live in the package proper, so the logic most likely to be wrong
@@ -14,6 +14,10 @@ using HEMSSimulator
 using HEMSSimulator:
     ASSET_COLOURS,
     Bill,
+    Contract,
+    HomeSystem,
+    RunOptions,
+    Weather,
     PLOT_MAX_POINTS,
     SimulationResult,
     StatePanel,
@@ -23,7 +27,8 @@ using HEMSSimulator:
     flow_series,
     interval_range,
     plot_blocks,
-    state_panels
+    state_panels,
+    with_assets
 using DataFrames: DataFrame, nrow
 using Dates: DateTime
 using Makie
@@ -58,9 +63,12 @@ function HEMSSimulator.dispatch_plot!(
     result::SimulationResult;
     days = 1:3,
     max_points::Integer = PLOT_MAX_POINTS,
+    include = nothing,
 )
     rows, blocks, x = _window(result, days, max_points)
     series = flow_series(result)
+    keep(entries) =
+        include === nothing ? entries : [e for e in entries if first(e) in include]
 
     # Sources stack up from zero, sinks stack down, so the meter balance shows as symmetry.
     function stack!(entries, sign)
@@ -77,14 +85,19 @@ function HEMSSimulator.dispatch_plot!(
                 x,
                 sign .* lower,
                 sign .* running;
-                color = RGBAf(Makie.red(colour), Makie.green(colour), Makie.blue(colour), 0.85),
+                color = RGBAf(
+                    Makie.red(colour),
+                    Makie.green(colour),
+                    Makie.blue(colour),
+                    0.85,
+                ),
             )
             push!(handles, label => handle)
         end
         return handles
     end
 
-    handles = vcat(stack!(series.sources, 1), stack!(series.sinks, -1))
+    handles = vcat(stack!(keep(series.sources), 1), stack!(keep(series.sinks), -1))
     hlines!(axis, [0.0]; color = :black, linewidth = 0.8)
 
     dt = hours(result.grid)
@@ -97,11 +110,12 @@ function HEMSSimulator.dispatch_plot(
     result::SimulationResult;
     days = 1:3,
     max_points::Integer = PLOT_MAX_POINTS,
+    include = nothing,
     size = (1000, 420),
 )
     figure = Figure(; size)
     axis = Axis(figure[1, 1]; title = "Dispatch")
-    handles = HEMSSimulator.dispatch_plot!(axis, result; days, max_points)
+    handles = HEMSSimulator.dispatch_plot!(axis, result; days, max_points, include)
     Legend(
         figure[1, 2],
         [handle for (_, handle) in handles],
@@ -238,11 +252,7 @@ function HEMSSimulator.sweep_plot!(axis::Axis, table::DataFrame; by::Symbol = :n
     return handles
 end
 
-function HEMSSimulator.sweep_plot(
-    table::DataFrame;
-    by::Symbol = :npv,
-    size = (760, 420),
-)
+function HEMSSimulator.sweep_plot(table::DataFrame; by::Symbol = :npv, size = (760, 420))
     figure = Figure(; size)
     axis = Axis(figure[1, 1]; title = "Business case")
     handles = HEMSSimulator.sweep_plot!(axis, table; by)
@@ -325,6 +335,171 @@ function HEMSSimulator.bill_plot(
     axis = Axis(figure[1, 1]; title = "Bill")
     HEMSSimulator.bill_plot!(axis, bill; baseline)
     return figure
+end
+
+# ---------------------------------------------------------------------------------------------
+# Interactive dashboard
+
+# Everything about a window that is worth reading as a number rather than a shape.
+function _window_kpis(result::SimulationResult, rows)
+    frame = result.frame
+    dt = hours(result.grid)
+    imported = sum(@view frame.import_kw[rows]) * dt
+    exported = sum(@view frame.export_kw[rows]) * dt
+    pv = (frame.pv_available_kw .- frame.curtail_kw)[rows]
+    sinks = HEMSSimulator.onsite_sinks(result)[rows]
+    produced = sum(pv)
+    self = produced > 0 ? sum(min.(pv, sinks)) / produced : NaN
+    cost =
+        sum(@view(frame.import_kw[rows]) .* @view(frame.price_buy[rows])) * dt -
+        sum(@view(frame.export_kw[rows]) .* @view(frame.price_sell[rows])) * dt
+    return """
+    import          $(round(imported; digits = 1)) kWh
+    export          $(round(exported; digits = 1)) kWh
+    PV used         $(round(produced * dt; digits = 1)) kWh
+    self-consumed   $(isnan(self) ? "n/a" : string(round(100self; digits = 1)) * "%")
+    window cost     €$(round(cost; digits = 2))
+    """
+end
+
+function HEMSSimulator.dashboard(
+    system::HomeSystem,
+    weather::Weather,
+    load_kw::AbstractVector,
+    contracts,
+    candidates::AbstractVector{<:AbstractAsset};
+    options::RunOptions = RunOptions(),
+    width::Integer = 3,
+    max_points::Integer = PLOT_MAX_POINTS,
+    size = (1500, 900),
+)
+    regimes = contracts isa Contract ? (; contract = contracts) : contracts
+    isempty(candidates) && throw(ArgumentError("give at least one candidate asset"))
+    grid = weather.grid
+    days = cld(grid.n, intervals_per_day(grid))
+
+    # One simulation per (scenario, candidate), computed the first time it is asked for. Scrubbing
+    # the window never triggers one; changing a menu does, once.
+    cache = Dict{Tuple{Symbol,Int},SimulationResult}()
+    function simulation(scenario::Symbol, candidate::Int)
+        return get!(cache, (scenario, candidate)) do
+            simulate(
+                with_assets(system, vcat(system.assets, [candidates[candidate]])),
+                weather,
+                load_kw,
+                regimes[scenario];
+                options,
+            )
+        end
+    end
+
+    scenario_names = collect(keys(regimes))
+    battery_labels = [
+        c isa Battery ? string(c.capacity_kwh, " kWh") : string(nameof(typeof(c)), " ", i) for (i, c) in enumerate(candidates)
+    ]
+
+    figure = Figure(; size)
+    left = figure[1, 1] = GridLayout()
+    right = figure[1, 2] = GridLayout(; tellheight = false)
+    colsize!(figure.layout, 1, Relative(0.78))
+
+    initial = simulation(first(scenario_names), 1)
+    panel_count = sum(
+        length(state_panels(a, initial, i)) for (i, a) in enumerate(initial.system.assets);
+        init = 0,
+    )
+
+    dispatch_axis = Axis(left[1, 1]; title = "Dispatch")
+    state_axes = [Axis(left[1+row, 1]) for row = 1:panel_count]
+    rowsize!(left, 1, Relative(0.34))
+    linkxaxes!(dispatch_axis, state_axes...)
+
+    sliders = SliderGrid(
+        left[panel_count+2, 1],
+        (label = "day", range = 1:days, startvalue = 1),
+        (label = "width", range = 1:min(28, days), startvalue = min(width, days)),
+    )
+
+    scenario_menu = Menu(
+        right[1, 1];
+        options = string.(scenario_names),
+        default = string(first(scenario_names)),
+    )
+    battery_menu =
+        Menu(right[2, 1]; options = battery_labels, default = first(battery_labels))
+    Label(right[1, 1, Top()], "scenario"; halign = :left, padding = (0, 0, 4, 0))
+    Label(right[2, 1, Top()], "battery"; halign = :left, padding = (0, 0, 4, 0))
+
+    series = flow_series(initial)
+    labels = vcat(first.(series.sources), first.(series.sinks))
+    toggles = [Toggle(figure; active = true) for _ in labels]
+    right[3, 1] = grid!(
+        hcat([Label(figure, l; halign = :left) for l in labels], [t for t in toggles]);
+        tellheight = false,
+    )
+
+    readout = Label(right[4, 1], ""; halign = :left, justification = :left, font = :regular)
+
+    function refresh()
+        scenario = scenario_names[findfirst(
+            ==(scenario_menu.selection[]),
+            string.(scenario_names),
+        )]
+        candidate = findfirst(==(battery_menu.selection[]), battery_labels)
+        result = simulation(scenario, candidate)
+
+        first_day = sliders.sliders[1].value[]
+        span = sliders.sliders[2].value[]
+        window = first_day:min(first_day+span-1, days)
+        rows = interval_range(result.grid, window)
+        blocks = plot_blocks(length(rows), max_points)
+        x = _axis_hours(result, rows, blocks)
+        keep = [l for (l, t) in zip(labels, toggles) if t.active[]]
+
+        empty!(dispatch_axis)
+        HEMSSimulator.dispatch_plot!(
+            dispatch_axis,
+            result;
+            days = window,
+            max_points,
+            include = keep,
+        )
+        dispatch_axis.title = "Dispatch — $(scenario), $(battery_labels[candidate])"
+
+        panels = StatePanel[]
+        for (index, asset) in enumerate(result.system.assets)
+            append!(panels, state_panels(asset, result, index))
+        end
+        for (axis, panel) in zip(state_axes, panels)
+            empty!(axis)
+            HEMSSimulator.state_plot!(axis, panel, rows, blocks, x)
+        end
+        # The axes are x-linked, so only the bottom one needs a labelled x-axis; `dispatch_plot!`
+        # sets one every redraw, which is right for a standalone figure and noise here.
+        stacked = vcat(dispatch_axis, state_axes)
+        for axis in stacked
+            autolimits!(axis)
+            axis.xticklabelsvisible = false
+            axis.xlabelvisible = false
+        end
+        last(stacked).xticklabelsvisible = true
+        last(stacked).xlabelvisible = true
+        readout.text[] =
+            "days $(first(window))–$(last(window))\n\n" * _window_kpis(result, rows)
+        return nothing
+    end
+
+    for slider in sliders.sliders
+        on(_ -> refresh(), slider.value)
+    end
+    on(_ -> refresh(), scenario_menu.selection)
+    on(_ -> refresh(), battery_menu.selection)
+    for toggle in toggles
+        on(_ -> refresh(), toggle.active)
+    end
+    refresh()
+
+    return (; figure, refresh, sliders, scenario_menu, battery_menu, toggles)
 end
 
 # ---------------------------------------------------------------------------------------------

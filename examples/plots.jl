@@ -1,19 +1,21 @@
 # Every plot the package provides, rendered to PNG.
 #
-# Needs CairoMakie, which is deliberately *not* a dependency of the package or of its test
+# Needs a Makie backend, which is deliberately *not* a dependency of the package or of its test
 # environment — the Makie stack takes about three minutes to precompile and CI should not pay that.
 # Set up an environment for it once:
 #
 #     julia -e 'using Pkg; Pkg.activate("plotenv"; shared = true);
-#               Pkg.develop(path = "."); Pkg.add(["CairoMakie", "DataFrames"])'
+#               Pkg.develop(path = "."); Pkg.add("GLMakie")'
 #     julia --project=@plotenv examples/plots.jl figs/
+#
+# GLMakie needs a GPU and a display. On a headless box swap it for CairoMakie — the extension is on
+# `Makie`, so nothing else changes.
 #
 # This script is also the smoke test for the Makie extension. There are no automated plotting tests,
 # so if you change `src/plots.jl` or `ext/HEMSSimulatorMakieExt.jl`, run this and look at the output.
 
 using HEMSSimulator
-using CairoMakie
-using DataFrames
+using GLMakie
 using Dates
 
 output = isempty(ARGS) ? mktempdir(; cleanup = false) : ARGS[1]
@@ -26,12 +28,8 @@ weather = synthetic_weather(grid, site; seed = 31)
 load = synthetic_load(grid; annual_kwh = 3000)
 prices = synthetic_prices(grid; seed = 33)
 pv = [PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180)]
-contract = Contract(
-    grid;
-    commodity = prices .+ 0.02,
-    feed_in = 0.04,
-    net_metering_fraction = 0.0,
-)
+contract =
+    Contract(grid; commodity = prices .+ 0.02, feed_in = 0.04, net_metering_fraction = 0.0)
 
 full_house = HomeSystem(
     site = site,
@@ -62,7 +60,7 @@ save(joinpath(output, "state.png"), state_plot(result; days = 1:3))
 # The business case. A filled marker is an interior optimum; a hollow one sits at the edge of the
 # candidate range, which means the range did not bracket it.
 bare = HomeSystem(site = site, pv = pv)
-candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in 2.5:2.5:15.0]
+candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:15.0]
 investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh)
 table = sweep(bare, weather, load, contract, candidates; investment)
 save(joinpath(output, "sweep.png"), sweep_plot(table))
@@ -77,7 +75,12 @@ save(
 # The bill as a waterfall, with ticks showing where each component sat without the battery.
 baseline = settle(simulate(bare, weather, load, contract), contract)
 with_battery = settle(
-    simulate(HomeSystem(site = site, pv = pv, assets = [Battery(10.0, 5.0)]), weather, load, contract),
+    simulate(
+        HomeSystem(site = site, pv = pv, assets = [Battery(10.0, 5.0)]),
+        weather,
+        load,
+        contract,
+    ),
     contract,
 )
 save(joinpath(output, "bill.png"), bill_plot(with_battery; baseline))

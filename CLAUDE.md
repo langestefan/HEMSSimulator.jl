@@ -255,7 +255,7 @@ generates. A fortnight annualised can produce almost any optimum; a year cannot.
 ## Plotting
 
 The plotting functions are **documented stubs** in `src/plots.jl`; their methods live in
-`ext/HEMSSimulatorMakieExt.jl` and appear when Makie is loaded (`using CairoMakie`). Makie is a
+`ext/HEMSSimulatorMakieExt.jl` and appear when Makie is loaded (`using GLMakie`). Makie is a
 `[weakdeps]` entry, never a dependency: its precompile is about three minutes against seconds for
 everything else combined, and nobody should pay that to run a simulation.
 
@@ -274,8 +274,18 @@ Two design points worth not undoing:
   battery's are constant fractions of capacity, a car's are deadlines at instants, a house's move
   every interval. An asset without a method is simply absent from the plot rather than wrong in it.
 
-Calling a plot function without Makie gives a `MethodError` plus a registered error hint naming
-CairoMakie — see `_register_plot_hint`, wired from `__init__`.
+`dashboard` is the interactive one: it **reuses `dispatch_plot!` and `state_plot!` and redraws on
+change** rather than being rebuilt around observables, so the interactive view and the static
+figures share one drawing path and cannot drift. Its toggles filter the dispatch stack only — the
+state panels always show every asset, because collapsing rows in a Makie `GridLayout` is fragile and
+the stack is what actually becomes unreadable. Simulations are cached per (scenario, candidate).
+
+The backend matters for the dashboard and not for the figures: **GLMakie** opens a window and
+handles events, and needs a GPU and a display. CairoMakie still renders every static plot, so a
+headless box loses only the dashboard.
+
+Calling a plot function without a backend gives a `MethodError` plus a registered error hint naming
+GLMakie — see `_register_plot_hint`, wired from `__init__`.
 
 **There are no plotting tests, by choice**, to keep CI fast. `examples/plots.jl` renders all seven
 figures and is the smoke test: run it after touching either file and look at the output. The pure
@@ -287,7 +297,8 @@ There is **no Documenter site**. It was removed: the deploy never worked without
 and the reference page was a single `@autodocs` dump nobody read. The API is documented in
 docstrings, reachable with `?` in the REPL, and everything narrative lives in one of two places:
 
-- `examples/plots.jl` — every figure the package can draw. Needs CairoMakie; see Plotting above.
+- `examples/plots.jl` — every figure the package can draw. Needs a Makie backend; see Plotting.
+- `examples/dashboard.jl` — the interactive dashboard. Needs GLMakie and a display.
 - `examples/tutorial.jl` — a runnable walkthrough of the whole package, from a `HomeSystem` through
   the four scenarios, the sizing sweep and LP bound, to the EV, heat pump and hot water tank. Prose
   is comments; every number it prints is computed when you run it. Keep it running — it is the only
