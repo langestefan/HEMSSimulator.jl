@@ -9,7 +9,8 @@
 # hour of solver time is never hostage to a typo in an axis label.
 #
 # Needs ENV["ENTSOE_API_TOKEN"]. Downloads are cached, so a re-run does not re-fetch and does not
-# silently drift when ERA5 is reanalysed.
+# silently drift when ERA5 is reanalysed. Simulations are cached too (`cache = true` below), which
+# removes this script's own duplicate solves and lets `explore.jl` open without re-solving anything.
 
 using HEMSSimulator
 using DataFrames
@@ -93,6 +94,7 @@ for (name, strategy) in pairs(STRATEGIES)
         candidates;
         investment,
         options = OPTIONS(strategy),
+        cache = true,
     )
     println("  ", round(elapsed / 60, digits = 1), " min")
     insertcols!(table, 1, :strategy => fill(name, nrow(table)))
@@ -127,7 +129,10 @@ for (name, strategy) in pairs(STRATEGIES)
 
     # The no-battery case. Both strategies dispatch the car differently, so it is worth recording
     # rather than inferring from the sweep.
-    bare = simulate(home, weather, load, contract; options)
+    # `cache = true` throughout: the sweep above already solved both of these — the baseline is its
+    # own no-battery case and the reference is candidate 10.0 kWh — so with the cache on they are
+    # lookups rather than two more years of solving.
+    bare = simulate(home, weather, load, contract; options, cache = true)
     bill = settle(bare, contract)
     push!(
         baselines,
@@ -140,7 +145,7 @@ for (name, strategy) in pairs(STRATEGIES)
         ),
     )
 
-    result = simulate(reference, weather, load, contract; options)
+    result = simulate(reference, weather, load, contract; options, cache = true)
 
     # Window data for the figures, in the long form `flow_table` and `state_table` produce. Three
     # days is what a dispatch plot can show; a year of 15-minute flows would be a CSV nobody reads.

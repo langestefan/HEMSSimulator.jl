@@ -38,8 +38,9 @@ function sweep(
     investment,
     options::RunOptions = RunOptions(),
     threaded::Bool = Threads.nthreads() > 1,
+    cache::Bool = false,
 )
-    baseline_result = simulate(system, inputs; options)
+    baseline_result = simulate(system, inputs; options, cache)
     baseline_bill = settle(baseline_result, contract)
 
     rows = Vector{NamedTuple}(undef, length(candidates))
@@ -52,6 +53,7 @@ function sweep(
             baseline_bill,
             investment,
             options,
+            cache,
         )
     if threaded
         # Each candidate builds its own JuMP model and its own solver instance; `inputs` and the
@@ -68,9 +70,18 @@ function sweep(
     return DataFrame(rows)
 end
 
-function _sweep_row(system, inputs, contract, candidate, baseline_bill, investment, options)
+function _sweep_row(
+    system,
+    inputs,
+    contract,
+    candidate,
+    baseline_bill,
+    investment,
+    options,
+    cache,
+)
     case_system = with_assets(system, vcat(system.assets, [candidate]))
-    result = simulate(case_system, inputs; options)
+    result = simulate(case_system, inputs; options, cache)
     bill = settle(result, contract)
     metrics = kpis(baseline_bill, bill, investment(candidate); result)
     capacity = candidate isa Battery ? candidate.capacity_kwh : NaN
@@ -106,9 +117,10 @@ function sweep(
     investment,
     options::RunOptions = RunOptions(),
     threaded::Bool = Threads.nthreads() > 1,
+    cache::Bool = false,
 )
     inputs = prepare(system, weather, load_kw, contract; options)
-    return sweep(system, inputs, contract, candidates; investment, options, threaded)
+    return sweep(system, inputs, contract, candidates; investment, options, threaded, cache)
 end
 
 """
@@ -153,6 +165,7 @@ function sweep(
     investment,
     options::RunOptions = RunOptions(),
     threaded::Bool = Threads.nthreads() > 1,
+    cache::Bool = false,
 )
     isempty(contracts) && throw(ArgumentError("no scenarios given"))
     frames = DataFrame[]
@@ -166,6 +179,7 @@ function sweep(
             investment,
             options,
             threaded,
+            cache,
         )
         push!(frames, insertcols!(table, 1, :scenario => fill(name, nrow(table))))
     end

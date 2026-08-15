@@ -15,11 +15,14 @@
 # week and watch the dispatch stack change. The economic controller charges from the grid overnight;
 # the green one never does, because importing to store can only add to the import it is minimising.
 #
-# All ten (scenario, battery, strategy) combinations are simulated before the window opens, threaded
-# — so **start Julia with `-t auto`**, or they run one at a time. That is several minutes of staring
-# at a terminal, and it is the right trade: a solve started from a menu click would run on the thread
-# that draws, freezing the window until it finished. Once the window is up, every menu and every
-# slider is instant.
+# Every (scenario, battery, strategy) combination is prepared before the window opens, threaded — so
+# **start Julia with `-t auto`**. Solving on a menu click would run on the thread that draws and
+# freeze the window until it finished, so the cost is paid up front instead; afterwards every menu
+# and every slider is instant.
+#
+# With `cache = true` that cost is usually zero: `run.jl` solves the same twelve cases and stores
+# them under `simulation_cache_dir()`, so this loads them. Run `run.jl` first and the window opens in
+# seconds; run this on a cold cache and it solves them itself, once.
 
 using HEMSSimulator
 using GLMakie
@@ -61,6 +64,7 @@ app = dashboard(
     options = OPTIONS(EconomicStrategy()),
     strategies = STRATEGIES,
     investment = INVESTMENT,
+    cache = true,
 )
 
 display(app.figure)

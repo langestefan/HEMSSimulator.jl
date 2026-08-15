@@ -104,6 +104,7 @@ include("analysis/sizing.jl")   # the sizing sweep
 include("analysis/sizing_lp.jl")# the idealised bound the sweep is checked against
 
 include("io/cache.jl")          # on-disk response cache, so a sweep downloads once
+include("io/simcache.jl")       # on-disk simulation cache, so a study solves each case once
 include("io/openmeteo.jl")      # ERA5 reanalysis weather
 include("io/entsoe.jl")         # day-ahead wholesale prices
 include("io/csv.jl")            # measured inputs from a file
@@ -164,6 +165,7 @@ export openmeteo_weather, openmeteo_url, openmeteo_parse, resample_weather
 export entsoe_prices, parse_entsoe_prices
 export read_inputs, validate_inputs, INPUT_COLUMNS
 export get_cache, set_cache, clear_cache!
+export simulation_key, simulation_cache_dir, clear_simulation_cache!
 
 # Plotting (methods require Makie, e.g. `using CairoMakie`)
 export dispatch_plot, dispatch_plot!, state_plot, state_plot!, price_plot, price_plot!

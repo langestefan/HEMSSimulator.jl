@@ -153,6 +153,29 @@ default when `Threads.nthreads() > 1`. Eight candidates over a year went from 30
 still serial. Start Julia with `-t auto` or it does nothing. A test asserts the threaded and serial
 tables are identical.
 
+The other lever is **not solving the same configuration twice**, which a study does more than it
+looks. `sweep` returns a table and discards every `SimulationResult` it computed, so `run.jl` then
+re-solves two of them — its no-battery baseline *is* the sweep's baseline, and its reference battery
+*is* one of the candidates — and `explore.jl` re-solves all twelve, because what reaches disk is
+aggregate tables and three-day slices, never a full year of flows. Sixteen year-solves for twelve
+distinct cases, then twelve more.
+
+`simulate(...; cache = true)` fixes all of it: results are stored under `simulation_cache_dir()`,
+keyed by a SHA-256 of `(system, inputs, options)` — exactly what `simulate` reads, which is why the
+contract is absent from the key. Points worth not undoing:
+
+- **The digest walks structs by reflection, not through `show`.** The `show` methods here are
+  readable summaries, and a summary that omits a field would let a changed input hit a stale entry.
+  Anything `_digest!` cannot reduce throws rather than falling back to `hash`, which is not stable
+  across sessions.
+- **It is off by default.** A cache that is on without being asked for is one that eventually answers
+  a question it was not asked; the experiment scripts opt in, the test suite does not.
+- **Frames are CSV, not Arrow.** Julia writes shortest-round-trippable floats, so a year round-trips
+  bit-exact — a test asserts it, because a cache that loses the last bits silently changes every bill
+  computed from it. Arrow would be smaller and faster and is not worth a dependency at this size.
+- Writes go to a temp file and are renamed, so a reader never sees half a frame and two threads
+  racing on one key leave one intact entry.
+
 ## Strategies
 
 `RunOptions.strategy` selects what the controller optimizes. It is two weights, not a branch — see

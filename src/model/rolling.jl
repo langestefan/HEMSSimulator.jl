@@ -10,6 +10,11 @@ That overlap is what stops the optimizer from emptying the battery at every boun
 structure a forecast model later plugs into — replacing perfect foresight means substituting the
 data sliced into each window, not changing this loop.
 
+`cache = true` looks the result up on disk first and stores it on a miss, keyed by everything this
+function reads — see [`simulation_key`](@ref). It is off by default because a cache that is on
+without being asked for is a cache that eventually answers the wrong question; turn it on in a script
+that solves the same configuration more than once, which a sweep followed by a dashboard does.
+
 `progress`, if given, is called after every window as `progress(done, total)`. A year at a
 15-minute control step is 35 040 windows and several minutes, so anything with a person waiting on it
 needs a way to say how far along it is; see [`ProgressBar`](@ref). It is called from inside the loop,
@@ -28,6 +33,22 @@ function simulate(
     inputs::SimulationInputs;
     options::RunOptions = RunOptions(),
     progress = nothing,
+    cache::Bool = false,
+)
+    cache || return _simulate(system, inputs, options, progress)
+    key = simulation_key(system, inputs, options)
+    hit = _load_simulation(key, system, inputs.grid)
+    hit === nothing || return hit
+    result = _simulate(system, inputs, options, progress)
+    _store_simulation(key, result)
+    return result
+end
+
+function _simulate(
+    system::HomeSystem,
+    inputs::SimulationInputs,
+    options::RunOptions,
+    progress,
 )
     grid = inputs.grid
     dt = hours(grid)
@@ -140,7 +161,8 @@ function simulate(
     contract::Contract;
     options::RunOptions = RunOptions(),
     progress = nothing,
+    cache::Bool = false,
 )
     inputs = prepare(system, weather, load_kw, contract; options)
-    return simulate(system, inputs; options, progress)
+    return simulate(system, inputs; options, progress, cache)
 end

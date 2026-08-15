@@ -809,6 +809,9 @@ tariff is flat across its interval and jumps at the boundary.
     the same picture in different clothes — dark uses [`VRM_COLOURS`](@ref) to match the portal, light
     uses the colour-blind-safe [`ASSET_COLOURS`](@ref). Take a screenshot for anyone who has to read
     it from the light one.
+  - `cache = true`: load each simulation from the on-disk cache instead of solving it, and store it
+    on a miss. Turn it on when a `run.jl` has already solved the same configurations — the dashboard
+    then opens in seconds rather than minutes. See [`simulation_key`](@ref).
   - `investment`: a function from a candidate asset to an [`Investment`](@ref), exactly as
     [`sweep`](@ref) takes. Supplies the NPV and payback cards; omit it and those two read `—`.
   - `precompute = true`: simulate every scenario × candidate × strategy up front, threaded, before

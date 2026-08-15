@@ -515,6 +515,7 @@ function HEMSSimulator.dashboard(
     width::Integer = 3,
     max_points::Integer = PLOT_MAX_POINTS,
     precompute::Bool = true,
+    cache::Bool = false,
     investment = nothing,
     theme::Symbol = :dark,
     size = (1500, 1020),
@@ -539,12 +540,15 @@ function HEMSSimulator.dashboard(
         regimes[scenario];
         options = _with_strategy(options, plans[plan]),
         progress,
+        cache,
     )
 
-    # One simulation per (scenario, candidate, strategy).
-    cache = Dict{Tuple{Symbol,Int,Symbol},SimulationResult}()
+    # One simulation per (scenario, candidate, strategy), held for the life of the window. Named
+    # `memo` rather than `cache` because `cache` is the keyword deciding whether `simulate` consults
+    # the *disk*, and a local of that name silently shadows it — which is exactly what it did.
+    memo = Dict{Tuple{Symbol,Int,Symbol},SimulationResult}()
     simulation(scenario::Symbol, candidate::Int, plan::Symbol) =
-        get!(() -> _run(scenario, candidate, plan), cache, (scenario, candidate, plan))
+        get!(() -> _run(scenario, candidate, plan), memo, (scenario, candidate, plan))
 
     # Every combination up front rather than one per click, and threaded like `sweep`. Solving on
     # demand looks cheaper, but the solve runs *inside the menu's event callback*: a year is 35 040
@@ -569,7 +573,7 @@ function HEMSSimulator.dashboard(
             computed[k] = _run(combos[k]...; progress = (_, _) -> step!(bar))
         end
         for (k, combo) in enumerate(combos)
-            cache[combo] = computed[k]
+            memo[combo] = computed[k]
         end
     end
     battery_labels = [
