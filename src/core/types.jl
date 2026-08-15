@@ -209,6 +209,12 @@ How a simulation is run: the rolling-horizon geometry, the solver, and the model
     simultaneously charges and discharges.
   - `strategy::AbstractStrategy`: what the controller optimizes for. See [`AbstractStrategy`](@ref).
   - `silent::Bool`: suppress solver output.
+  - `direct::Bool`: build each window with JuMP's [`direct_model`](https://jump.dev/JuMP.jl/stable/manual/models/#Direct-mode)
+    instead of the default caching layer. Worth about 27% of a window: the cache has to be *copied*
+    into the solver at `optimize!`, and on this model that copy costs nearly as much as the solve.
+    The trade is that a direct model has no bridges, so an optimizer that cannot take a constraint
+    natively errors instead of having it reformulated. HiGHS takes everything this package builds,
+    which is why it defaults to `true`; set it to `false` for a solver that needs bridging.
 """
 struct RunOptions{O,S<:AbstractStrategy}
     window_hours::Float64
@@ -220,6 +226,7 @@ struct RunOptions{O,S<:AbstractStrategy}
     check_degeneracy::Bool
     strategy::S
     silent::Bool
+    direct::Bool
 end
 
 # Written out rather than `@kwdef` so that the hours accept any `Real`: `step_hours = 0.25` and
@@ -235,6 +242,7 @@ RunOptions(;
     check_degeneracy::Bool = true,
     strategy::AbstractStrategy = EconomicStrategy(),
     silent::Bool = true,
+    direct::Bool = true,
 ) = RunOptions(
     float(window_hours),
     float(step_hours),
@@ -245,6 +253,7 @@ RunOptions(;
     check_degeneracy,
     strategy,
     silent,
+    direct,
 )
 
 """

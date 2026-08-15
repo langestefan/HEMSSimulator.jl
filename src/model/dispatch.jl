@@ -21,7 +21,13 @@ function build_window(system::HomeSystem, ctx::DispatchContext, states)
     n = ctx.grid.n
     dt = ctx.dt
     inputs = ctx.inputs
-    model = Model(ctx.options.optimizer)
+    # Direct mode by default: the caching layer's contents have to be copied into the solver at
+    # `optimize!`, and on a window this size that copy costs about as much as the solve itself.
+    # See `RunOptions.direct` for what it gives up.
+    model =
+        ctx.options.direct ?
+        JuMP.direct_model(JuMP.MOI.instantiate(ctx.options.optimizer)) :
+        Model(ctx.options.optimizer)
     ctx.options.silent && set_silent(model)
 
     limit = system.connection_kw

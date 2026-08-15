@@ -149,6 +149,36 @@ Measured on a full synthetic year (35 040 intervals, 366 windows of 48 h):
 | PV + battery | 4.3 s | 1.7 s (40%) | 2.6 s |
 | PV + battery + EV + heat pump + DHW | 20.9 s | 14.0 s (67%) | 6.9 s |
 
+**Where the time actually goes, measured per window on the 2025 study (24 h window, 15-min step,
+PV + battery + EV, 864 variables):** `build_window` 0.95 ms, the driver's own bookkeeping 0.14 ms,
+`optimize!` 6.15 ms — of which HiGHS's `solve_time` is only 3.3 ms. The missing ~2.9 ms was the MOI
+caching layer being **copied** into the solver at `optimize!`. Neither building nor solving: copying.
+
+`RunOptions.direct` (default `true`) removes it with JuMP's `direct_model`. Building gets slower —
+every variable goes straight to the solver instead of into a cheap cache — but `optimize!` nearly
+halves. Measured over a full year: 268 → 227 s with the EV, 182 → 150 s without, and HiGHS's own time
+unchanged, which is the tell that the saving is all copy. A test compares every numeric column of a
+four-day run between direct and cached mode; skipping a layer whose only job is to hold a copy must
+not move a number.
+
+The cost is that a direct model has **no bridges**. HiGHS takes everything this package builds, so
+this is free here; a solver that needs a constraint reformulated wants `direct = false`.
+
+**`MOI.Parameter` is not the way to reuse a model here**, despite the plan below. HiGHS does not
+support parameters natively (`MOI.supports_constraint(..., MOI.Parameter{Float64})` is `false`), so
+they exist only through a bridge — and a direct model has none, rejecting them with
+`UnsupportedConstraint`. Using them means going back to the cached `Model` and handing back the 15%
+direct mode just won. The API that does work in direct mode is in-place modification:
+`set_objective_coefficient`, `set_normalized_rhs`, `set_upper_bound`.
+
+The prize for reuse is real and larger than the build: re-solving one model after moving only the
+objective costs **0.66 ms against 2.31 ms cold — 3.5x** — because HiGHS keeps its basis. What stops
+it is that the model's *structure* changes between windows: the EV's connection mask and departure
+targets, the heat pump's moving comfort band, and a final window shorter than the rest. Every asset
+would need an `update!` beside `add_constraints!`, holding constraint references and re-pointing
+every window-dependent number, and would have to be re-expressible with a fixed constraint set. That
+is a change to the `AbstractAsset` contract, which is the thing kept deliberately small.
+
 The original plan assumed model *construction* dominated and that reusing one model across windows
 via `MOI.Parameter` would be the first lever. That was true of the thin slice and is not true now:
 once the house has a realistic set of assets, two thirds of the time is inside the solver, so model

@@ -1,4 +1,5 @@
-@testitem "effective_lifetime takes the shorter of calendar and cycles" tags = [:unit, :fast] begin
+@testitem "effective_lifetime takes the shorter of calendar and cycles" tags =
+    [:unit, :fast] begin
     inv = Investment(capex = 2400.0, lifetime_years = 15, rated_cycles = 4000.0)
 
     @test effective_lifetime(inv, 334.1) ≈ 4000 / 334.1        # worked hard: cycles bind
@@ -76,7 +77,9 @@ end
     contract = Contract(grid; commodity = synthetic_prices(grid) .+ 0.02, feed_in = 0.04)
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
+        ],
         assets = AbstractAsset[],
     )
     options = RunOptions(window_hours = 24, step_hours = 6, terminal_value = false)

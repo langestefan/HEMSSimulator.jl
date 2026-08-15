@@ -502,6 +502,7 @@ _with_strategy(o::RunOptions, strategy) = RunOptions(
     o.check_degeneracy,
     strategy,
     o.silent,
+    o.direct,
 )
 
 function HEMSSimulator.dashboard(
