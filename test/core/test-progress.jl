@@ -57,13 +57,22 @@ end
     contract = Contract(grid; commodity = synthetic_prices(grid), feed_in = 0.04)
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
+        ],
         assets = [Battery(10.0, 5.0)],
     )
     options = RunOptions(window_hours = 24, step_hours = 6, terminal_value = false)
 
     seen = Tuple{Int,Int}[]
-    result = simulate(home, weather, load, contract; options, progress = (d, t) -> push!(seen, (d, t)))
+    result = simulate(
+        home,
+        weather,
+        load,
+        contract;
+        options,
+        progress = (d, t) -> push!(seen, (d, t)),
+    )
 
     # One call per window, counting up, and the total it advertises is the total it reaches — a bar
     # that never arrives at 100% reads as a hang.

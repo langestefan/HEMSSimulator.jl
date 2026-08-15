@@ -166,13 +166,14 @@ export read_inputs, validate_inputs, INPUT_COLUMNS
 export get_cache, set_cache, clear_cache!
 
 # Plotting (methods require Makie, e.g. `using CairoMakie`)
-export dispatch_plot, dispatch_plot!, state_plot, state_plot!
+export dispatch_plot, dispatch_plot!, state_plot, state_plot!, price_plot, price_plot!
 export sweep_plot, sweep_plot!, bill_plot, bill_plot!
 export dashboard
 export hems_theme, StatePanel, state_panels, flow_series, bill_components
 export flow_table, state_table
 export ASSET_COLOURS,
     SERIES_COLOURS, series_colour, interval_range, Intervals, time_ticks, TIME_TICK_FORMAT
+export VRM_COLOURS, PlotTheme, DARK_THEME, LIGHT_THEME, plot_theme
 
 # Synthetic inputs
 export synthetic_weather, synthetic_load, synthetic_prices, baseload, clearsky_ghi

@@ -6,6 +6,11 @@
 # comes from `data/inputs.csv`, which `run.jl` wrote — so this explores exactly the run that
 # produced the committed results, not a fresh download that might differ.
 #
+# The layout follows Victron's VRM portal: prices on top, the energy stack below, asset states under
+# that, and the window's totals on cards along the bottom. The **theme** menu switches dark to light
+# — dark uses VRM's own colours, light the colour-blind-safe ones, so screenshot from light if the
+# picture is going to someone else.
+#
 # The strategy menu is the point: pick a battery, then flip between economic and green on the same
 # week and watch the dispatch stack change. The economic controller charges from the grid overnight;
 # the green one never does, because importing to store can only add to the import it is minimising.

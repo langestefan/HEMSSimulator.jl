@@ -15,8 +15,9 @@ using HEMSSimulator:
     ASSET_COLOURS,
     Bill,
     Contract,
-    Intervals,
     HomeSystem,
+    Intervals,
+    PlotTheme,
     RunOptions,
     Weather,
     PLOT_MAX_POINTS,
@@ -28,12 +29,13 @@ using HEMSSimulator:
     flow_series,
     interval_range,
     plot_blocks,
+    plot_theme,
     state_panels,
     with_assets
 using DataFrames: DataFrame, nrow
-using Dates: Date, DateTime, Day
+using Dates: Date, DateTime, Day, Millisecond
 using Makie
-using Makie: Axis, Figure, Label, Legend, Point2f, RGBAf, Theme
+using Makie: Axis, Box, Figure, Label, Legend, Point2f, PolyElement, RGBAf, Theme, to_color
 
 const HOURS_PER_DAY = 24
 
@@ -93,11 +95,21 @@ function HEMSSimulator.dispatch_plot!(
     days = 1:3,
     max_points::Integer = PLOT_MAX_POINTS,
     include = nothing,
+    colours = ASSET_COLOURS,
+    now = nothing,
+    zero_colour = :black,
 )
     rows, blocks, x = _window(result, days, max_points)
-    series = flow_series(result)
+    dt = hours(result.grid)
+    series = flow_series(result; colours)
     keep(entries) =
         include === nothing ? entries : [e for e in entries if first(e) in include]
+
+    # Bars rather than a filled band, which is what VRM draws and what the quantity actually is: an
+    # interval's energy, not a value sampled at an instant. Each bar spans its own block, so the
+    # width is the block width and the anchor is its centre.
+    span = blocks * dt
+    centres = x .+ span / 2
 
     # Sources stack up from zero, sinks stack down, so the meter balance shows as symmetry.
     function stack!(entries, sign)
@@ -108,31 +120,40 @@ function HEMSSimulator.dispatch_plot!(
             all(iszero, drawn) && continue
             lower = copy(running)
             running .+= drawn
-            colour, = _colour(hex)
-            handle = band!(
+            handle = barplot!(
                 axis,
-                x,
-                sign .* lower,
+                centres,
                 sign .* running;
-                color = RGBAf(
-                    Makie.red(colour),
-                    Makie.green(colour),
-                    Makie.blue(colour),
-                    0.85,
-                ),
+                fillto = sign .* lower,
+                width = span,
+                gap = 0,
+                color = first(_colour(hex)),
             )
             push!(handles, label => handle)
         end
         return handles
     end
 
+    _cursor!(axis, result, rows, now)
     handles = vcat(stack!(keep(series.sources), 1), stack!(keep(series.sinks), -1))
-    hlines!(axis, [0.0]; color = :black, linewidth = 0.8)
+    hlines!(axis, [0.0]; color = zero_colour, linewidth = 0.8)
 
     _time_axis!(axis, result, rows)
-    axis.xlabel = _note(blocks, hours(result.grid))
+    axis.xlabel = _note(blocks, dt)
     axis.ylabel = "kW  (sources up, sinks down)"
     return handles
+end
+
+# The "Now" band. A simulation has no now — every interval of it has already been solved — so this is
+# opt-in rather than derived: pass a `DateTime` to mark the instant a reader should be looking at.
+function _cursor!(axis::Axis, result::SimulationResult, rows, now)
+    now === nothing && return nothing
+    dt = hours(result.grid)
+    origin = timestamp(result.grid, first(rows))
+    offset = (now - origin) / Millisecond(1) / 3_600_000
+    0 <= offset <= length(rows) * dt || return nothing
+    vspan!(axis, offset, offset + dt; color = RGBAf(0.5, 0.5, 0.5, 0.35))
+    return offset
 end
 
 function HEMSSimulator.dispatch_plot(
@@ -140,15 +161,80 @@ function HEMSSimulator.dispatch_plot(
     days = 1:3,
     max_points::Integer = PLOT_MAX_POINTS,
     include = nothing,
+    colours = ASSET_COLOURS,
+    now = nothing,
     size = (1000, 420),
 )
     figure = Figure(; size)
     axis = Axis(figure[1, 1]; title = "Dispatch")
-    handles = HEMSSimulator.dispatch_plot!(axis, result; days, max_points, include)
+    handles =
+        HEMSSimulator.dispatch_plot!(axis, result; days, max_points, include, colours, now)
     Legend(
         figure[1, 2],
         [handle for (_, handle) in handles],
         [label for (label, _) in handles];
+        framevisible = false,
+    )
+    return figure
+end
+
+# ---------------------------------------------------------------------------------------------
+# Prices
+
+function HEMSSimulator.price_plot!(
+    axis::Axis,
+    result::SimulationResult;
+    days = 1:3,
+    max_points::Integer = PLOT_MAX_POINTS,
+    colours = ASSET_COLOURS,
+    now = nothing,
+)
+    rows, blocks, x = _window(result, days, max_points)
+    dt = hours(result.grid)
+
+    # Steps, not a line. A quarter-hour price is flat across its interval and jumps at the boundary;
+    # joining the points with a slope would draw a price that was never charged.
+    _cursor!(axis, result, rows, now)
+    handles = Pair{String,Any}[]
+    for (label, column, hex) in (
+        ("buy price", :price_buy, colours.var"import"),
+        ("sell price", :price_sell, colours.export_),
+    )
+        values = block_mean(result.frame[!, column][rows], blocks)
+        edges = vcat(x, last(x) + blocks * dt)
+        handle = stairs!(
+            axis,
+            edges,
+            vcat(values, last(values));
+            step = :post,
+            color = first(_colour(hex)),
+            linewidth = 1.8,
+        )
+        push!(handles, label => handle)
+    end
+
+    _time_axis!(axis, result, rows)
+    axis.xlabel = _note(blocks, dt)
+    axis.ylabel = "€/kWh"
+    return handles
+end
+
+function HEMSSimulator.price_plot(
+    result::SimulationResult;
+    days = 1:3,
+    max_points::Integer = PLOT_MAX_POINTS,
+    colours = ASSET_COLOURS,
+    now = nothing,
+    size = (1000, 320),
+)
+    figure = Figure(; size)
+    axis = Axis(figure[1, 1]; title = "Energy prices")
+    handles = HEMSSimulator.price_plot!(axis, result; days, max_points, colours, now)
+    Legend(
+        figure[2, 1],
+        [h for (_, h) in handles],
+        [l for (l, _) in handles];
+        orientation = :horizontal,
         framevisible = false,
     )
     return figure
@@ -380,26 +466,22 @@ end
 # ---------------------------------------------------------------------------------------------
 # Interactive dashboard
 
-# Everything about a window that is worth reading as a number rather than a shape.
-function _window_kpis(result::SimulationResult, rows)
+# Everything about a window that is worth reading as a number rather than a shape. Returned as
+# numbers rather than a formatted block, because the cards each want one of them on its own.
+function _window_totals(result::SimulationResult, rows)
     frame = result.frame
     dt = hours(result.grid)
-    imported = sum(@view frame.import_kw[rows]) * dt
-    exported = sum(@view frame.export_kw[rows]) * dt
     pv = (frame.pv_available_kw .- frame.curtail_kw)[rows]
     sinks = HEMSSimulator.onsite_sinks(result)[rows]
     produced = sum(pv)
-    self = produced > 0 ? sum(min.(pv, sinks)) / produced : NaN
-    cost =
-        sum(@view(frame.import_kw[rows]) .* @view(frame.price_buy[rows])) * dt -
-        sum(@view(frame.export_kw[rows]) .* @view(frame.price_sell[rows])) * dt
-    return """
-    import          $(round(imported; digits = 1)) kWh
-    export          $(round(exported; digits = 1)) kWh
-    PV used         $(round(produced * dt; digits = 1)) kWh
-    self-consumed   $(isnan(self) ? "n/a" : string(round(100self; digits = 1)) * "%")
-    window cost     €$(round(cost; digits = 2))
-    """
+    return (;
+        imported = sum(@view frame.import_kw[rows]) * dt,
+        exported = sum(@view frame.export_kw[rows]) * dt,
+        pv = produced * dt,
+        self = produced > 0 ? sum(min.(pv, sinks)) / produced : NaN,
+        cost = sum(@view(frame.import_kw[rows]) .* @view(frame.price_buy[rows])) * dt -
+               sum(@view(frame.export_kw[rows]) .* @view(frame.price_sell[rows])) * dt,
+    )
 end
 
 # RunOptions is immutable, so a strategy switch rebuilds it field for field.
@@ -426,7 +508,8 @@ function HEMSSimulator.dashboard(
     width::Integer = 3,
     max_points::Integer = PLOT_MAX_POINTS,
     precompute::Bool = true,
-    size = (1500, 900),
+    theme::Symbol = :dark,
+    size = (1500, 1020),
 )
     regimes = contracts isa Contract ? (; contract = contracts) : contracts
     plans = strategies === nothing ? (; strategy = options.strategy) : strategies
@@ -480,10 +563,15 @@ function HEMSSimulator.dashboard(
         c isa Battery ? string(c.capacity_kwh, " kWh") : string(nameof(typeof(c)), " ", i) for (i, c) in enumerate(candidates)
     ]
 
-    figure = Figure(; size)
+    # The live theme. Everything drawn reads `palette[]` rather than a captured value, so the switch
+    # is a redraw and not a rebuild.
+    palette = Ref(plot_theme(theme))
+
+    figure = Figure(; size, backgroundcolor = palette[].background)
     left = figure[1, 1] = GridLayout()
     right = figure[1, 2] = GridLayout(; tellheight = false)
-    colsize!(figure.layout, 1, Relative(0.78))
+    cards = figure[2, 1:2] = GridLayout()
+    colsize!(figure.layout, 1, Relative(0.80))
 
     initial = simulation(first(scenario_names), 1, first(plan_names))
     panel_count = sum(
@@ -491,10 +579,49 @@ function HEMSSimulator.dashboard(
         init = 0,
     )
 
-    dispatch_axis = Axis(left[1, 1]; title = "Dispatch")
-    state_axes = [Axis(left[1+row, 1]) for row = 1:panel_count]
-    rowsize!(left, 1, Relative(0.34))
-    linkxaxes!(dispatch_axis, state_axes...)
+    # VRM's arrangement: a section heading, the unit written horizontally above the axis rather than
+    # rotated beside it, the plot, then a horizontal legend underneath. Prices on top, energy below.
+    headings = Label[]
+    units = Label[]
+    function _section(row, title, unit)
+        push!(
+            headings,
+            Label(
+                left[row, 1],
+                title;
+                halign = :left,
+                fontsize = 15,
+                tellwidth = false,
+                padding = (0, 0, 2, 10),
+            ),
+        )
+        # The unit goes above the axis, horizontal, the way VRM writes it — not rotated up the side.
+        push!(
+            units,
+            Label(
+                left[row+1, 1],
+                unit;
+                halign = :left,
+                fontsize = 10,
+                tellwidth = false,
+                padding = (4, 0, 2, 0),
+            ),
+        )
+        return Axis(left[row+2, 1])
+    end
+
+    price_axis = _section(1, "Energy prices", "€/kWh")
+    energy_axis = _section(5, "Energy", "kW  (sources up, sinks down)")
+    state_axes = [Axis(left[8+row, 1]) for row = 1:panel_count]
+    linkxaxes!(price_axis, energy_axis, state_axes...)
+    # The two headline panels carry most of the height; the state panels still need enough not to
+    # collapse their y ticks into a smear.
+    rowsize!(left, 3, Auto(1.8))
+    rowsize!(left, 7, Auto(2.6))
+    for row = 1:panel_count
+        rowsize!(left, 8 + row, Auto(1.2))
+        state_axes[row].yticks = Makie.LinearTicks(4)
+    end
 
     # The sliders read in the units a person thinks in: a date to start from, and a width in hours.
     # Their *values* stay an integer day index and an integer hour count; only the labels change.
@@ -503,7 +630,7 @@ function HEMSSimulator.dashboard(
     start_date = Date(grid.start)
     widths = sort(unique(vcat([3, 6, 12], collect(24:24:(24*min(28, days))))))
     sliders = SliderGrid(
-        left[panel_count+2, 1],
+        left[9+panel_count, 1],
         (
             label = "from",
             range = 1:days,
@@ -525,12 +652,29 @@ function HEMSSimulator.dashboard(
     )
     battery_menu =
         Menu(right[2, 1]; options = battery_labels, default = first(battery_labels))
-    Label(right[1, 1, Top()], "scenario"; halign = :left, padding = (0, 0, 4, 0))
-    Label(right[2, 1, Top()], "battery"; halign = :left, padding = (0, 0, 4, 0))
+    menu_labels = [
+        Label(
+            right[1, 1, Top()],
+            "scenario";
+            halign = :left,
+            tellwidth = false,
+            padding = (0, 0, 4, 0),
+        ),
+        Label(
+            right[2, 1, Top()],
+            "battery";
+            halign = :left,
+            tellwidth = false,
+            padding = (0, 0, 4, 0),
+        ),
+    ]
 
     # Only worth a menu when there is a choice to make, so the row below it moves.
     strategy_menu = if length(plan_names) > 1
-        Label(right[3, 1, Top()], "strategy"; halign = :left, padding = (0, 0, 4, 0))
+        push!(
+            menu_labels,
+            Label(right[3, 1, Top()], "strategy"; halign = :left, padding = (0, 0, 4, 0)),
+        )
         Menu(
             right[3, 1];
             options = string.(plan_names),
@@ -539,23 +683,162 @@ function HEMSSimulator.dashboard(
     else
         nothing
     end
-    next_row = strategy_menu === nothing ? 3 : 4
+    theme_row = strategy_menu === nothing ? 3 : 4
+    push!(
+        menu_labels,
+        Label(right[theme_row, 1, Top()], "theme"; halign = :left, padding = (0, 0, 4, 0)),
+    )
+    theme_menu =
+        Menu(right[theme_row, 1]; options = ["dark", "light"], default = string(theme))
+    next_row = theme_row + 1
 
     series = flow_series(initial)
     labels = vcat(first.(series.sources), first.(series.sinks))
     toggles = [Toggle(figure; active = true) for _ in labels]
-    right[next_row, 1] = grid!(
-        hcat([Label(figure, l; halign = :left) for l in labels], [t for t in toggles]);
-        tellheight = false,
-    )
+    toggle_labels = [Label(figure, l; halign = :left) for l in labels]
+    right[next_row, 1] =
+        grid!(hcat(toggle_labels, [t for t in toggles]); tellheight = false)
 
-    readout = Label(
-        right[next_row+1, 1],
-        "";
-        halign = :left,
-        justification = :left,
-        font = :regular,
-    )
+    window_label =
+        Label(left[10+panel_count, 1], ""; halign = :left, fontsize = 11, tellwidth = false)
+
+    # VRM's cards. One number each, for whatever window is on screen.
+    card_titles = ("From grid", "To grid", "PV used", "Window cost")
+    card_boxes = Box[]
+    card_heads = Label[]
+    card_values = Label[]
+    for (column, title) in enumerate(card_titles)
+        inner = cards[1, column] = GridLayout()
+        push!(
+            card_boxes,
+            Box(
+                inner[1:2, 1];
+                color = palette[].panel,
+                strokevisible = false,
+                cornerradius = 6,
+            ),
+        )
+        push!(
+            card_heads,
+            Label(
+                inner[1, 1],
+                title;
+                halign = :left,
+                fontsize = 11,
+                tellwidth = false,
+                padding = (14, 14, 10, 0),
+            ),
+        )
+        push!(
+            card_values,
+            Label(
+                inner[2, 1],
+                "—";
+                halign = :left,
+                fontsize = 24,
+                tellwidth = false,
+                padding = (14, 14, 0, 12),
+            ),
+        )
+    end
+
+    # Rebuilt rather than restyled on a theme change: a legend entry carries its swatch colour, and
+    # the swatch is exactly what the theme changes.
+    legends = Legend[]
+    function _rebuild_legends!()
+        foreach(delete!, legends)
+        empty!(legends)
+        colours = palette[].colours
+        swatches(hexes) = [PolyElement(; color = first(_colour(h))) for h in hexes]
+        bar(row, hexes, names) = push!(
+            legends,
+            Legend(
+                left[row, 1],
+                swatches(hexes),
+                names;
+                orientation = :horizontal,
+                nbanks = 1,
+                framevisible = false,
+                labelcolor = palette[].foreground,
+                labelsize = 11,
+                colgap = 14,
+                patchsize = (11, 11),
+                tellwidth = false,
+                halign = :left,
+                padding = (0, 0, 2, 2),
+            ),
+        )
+        bar(4, [colours.var"import", colours.export_], ["buy price", "sell price"])
+        # Re-derived from the themed table rather than reused from the initial `series`, whose
+        # colours are whatever palette was in force when the dashboard was built.
+        themed = flow_series(initial; colours)
+        entries = vcat(themed.sources, themed.sinks)
+        bar(8, [last(v) for (_, v) in entries], [k for (k, _) in entries])
+        return nothing
+    end
+
+    # One place that knows how a theme reaches every piece of chrome. The plots themselves are
+    # recoloured by `refresh`, which reads `palette[]` when it redraws.
+    function _apply_theme!()
+        active = palette[]
+        figure.scene.backgroundcolor[] = to_color(active.background)
+        for axis in vcat(price_axis, energy_axis, state_axes)
+            axis.backgroundcolor = active.background
+            axis.xgridcolor = active.grid
+            axis.ygridcolor = active.grid
+            axis.xminorgridcolor = active.minorgrid
+            axis.yminorgridcolor = active.minorgrid
+            # VRM draws no box: an axis line along the bottom and the left, and nothing else.
+            axis.topspinevisible = false
+            axis.rightspinevisible = false
+            axis.leftspinecolor = active.grid
+            axis.bottomspinecolor = active.grid
+            axis.xtickcolor = active.muted
+            axis.ytickcolor = active.muted
+            axis.xminortickcolor = active.muted
+            axis.yminortickcolor = active.muted
+            axis.xticklabelcolor = active.muted
+            axis.yticklabelcolor = active.muted
+            axis.xlabelcolor = active.muted
+            axis.ylabelcolor = active.muted
+            axis.titlecolor = active.foreground
+        end
+        for label in vcat(headings, menu_labels, toggle_labels, card_heads)
+            label.color = active.foreground
+        end
+        for label in vcat(units, window_label)
+            label.color = active.muted
+        end
+        foreach(box -> box.color = active.panel, card_boxes)
+        foreach(label -> label.color = active.foreground, card_values)
+        # Makie's controls default to a light chrome that looks pasted on over a dark panel.
+        for menu in
+            filter(!isnothing, (scenario_menu, battery_menu, strategy_menu, theme_menu))
+            menu.textcolor = active.foreground
+            menu.dropdown_arrow_color = active.muted
+            menu.cell_color_inactive_even = active.panel
+            menu.cell_color_inactive_odd = active.panel
+            menu.cell_color_hover = active.grid
+            menu.cell_color_active = active.grid
+            menu.selection_cell_color_inactive = active.panel
+        end
+        for toggle in toggles
+            toggle.framecolor_inactive = active.grid
+            toggle.framecolor_active = first(_colour(active.colours.battery))
+        end
+        for slider in sliders.sliders
+            slider.color_inactive = active.grid
+            slider.color_active_dimmed = active.panel
+        end
+        for slider in sliders.labels
+            slider.color = active.muted
+        end
+        for value in sliders.valuelabels
+            value.color = active.muted
+        end
+        _rebuild_legends!()
+        return nothing
+    end
 
     # Makie blanks a menu's `selection` to `nothing` whenever its `i_selected` reaches 0 — an options
     # update does it, and it is reachable by setting `i_selected` directly. `findfirst` then returns
@@ -584,6 +867,7 @@ function HEMSSimulator.dashboard(
         candidate = chosen[2]
         plan = plan_names[chosen[3]]
         result = simulation(scenario, candidate, plan)
+        active = palette[]
 
         # Width is in hours, so the window is an exact interval range rather than whole days.
         first_day = sliders.sliders[1].value[]
@@ -597,41 +881,65 @@ function HEMSSimulator.dashboard(
         x = _axis_hours(result, rows, blocks)
         keep = [l for (l, t) in zip(labels, toggles) if t.active[]]
 
-        empty!(dispatch_axis)
+        empty!(price_axis)
+        HEMSSimulator.price_plot!(
+            price_axis,
+            result;
+            days = Intervals(rows),
+            max_points,
+            colours = active.colours,
+        )
+
+        empty!(energy_axis)
         HEMSSimulator.dispatch_plot!(
-            dispatch_axis,
+            energy_axis,
             result;
             days = Intervals(rows),
             max_points,
             include = keep,
+            colours = active.colours,
+            zero_colour = active.muted,
         )
-        dispatch_axis.title =
+        headings[2].text[] =
             length(plan_names) > 1 ?
-            "Dispatch — $(scenario), $(battery_labels[candidate]), $(plan)" :
-            "Dispatch — $(scenario), $(battery_labels[candidate])"
+            "Energy — $(scenario), $(battery_labels[candidate]), $(plan)" :
+            "Energy — $(scenario), $(battery_labels[candidate])"
 
         panels = StatePanel[]
         for (index, asset) in enumerate(result.system.assets)
-            append!(panels, state_panels(asset, result, index))
+            append!(panels, state_panels(asset, result, index; colours = active.colours))
         end
         for (axis, panel) in zip(state_axes, panels)
             empty!(axis)
             HEMSSimulator.state_plot!(axis, panel, rows, blocks, x)
         end
-        # The axes are x-linked, so only the bottom one needs a labelled x-axis; `dispatch_plot!`
-        # sets one every redraw, which is right for a standalone figure and noise here.
-        stacked = vcat(dispatch_axis, state_axes)
+        # The axes are x-linked, so only the bottom one needs a labelled x-axis; the plot functions
+        # set one every redraw, which is right for a standalone figure and noise here.
+        stacked = vcat(price_axis, energy_axis, state_axes)
         for axis in stacked
             autolimits!(axis)
             _time_axis!(axis, result, rows)
             axis.xticklabelsvisible = false
             axis.xlabelvisible = false
+            axis.ylabelvisible = false
         end
         last(stacked).xticklabelsvisible = true
         last(stacked).xlabelvisible = true
-        readout.text[] =
-            "$(timestamp(result.grid, first(rows))) → $(timestamp(result.grid, last(rows)))\n\n" *
-            _window_kpis(result, rows)
+
+        window = _window_totals(result, rows)
+        card_values[1].text[] = "$(round(window.imported; digits = 1)) kWh"
+        card_values[2].text[] = "$(round(window.exported; digits = 1)) kWh"
+        card_values[3].text[] = "$(round(window.pv; digits = 1)) kWh"
+        card_values[4].text[] = "€$(round(window.cost; digits = 2))"
+        window_label.text[] = "$(timestamp(result.grid, first(rows)))  →  $(timestamp(result.grid, last(rows)))"
+        return nothing
+    end
+
+    on(theme_menu.selection) do choice
+        choice === nothing && return nothing
+        palette[] = plot_theme(Symbol(choice))
+        _apply_theme!()
+        refresh()
         return nothing
     end
 
@@ -644,33 +952,55 @@ function HEMSSimulator.dashboard(
     for toggle in toggles
         on(_ -> refresh(), toggle.active)
     end
+    _apply_theme!()
     refresh()
 
-    return (; figure, refresh, sliders, scenario_menu, battery_menu, strategy_menu, toggles)
+    return (;
+        figure,
+        refresh,
+        sliders,
+        scenario_menu,
+        battery_menu,
+        strategy_menu,
+        theme_menu,
+        toggles,
+        palette,
+    )
 end
 
 # ---------------------------------------------------------------------------------------------
 # Theme
 
-function HEMSSimulator.hems_theme()
+function HEMSSimulator.hems_theme(name::Symbol = :light)
+    active = plot_theme(name)
     return Theme(;
         fontsize = 12,
+        backgroundcolor = active.background,
+        textcolor = active.foreground,
         palette = (color = [first(_colour(hex)) for hex in SERIES_COLOURS],),
         Axis = (;
+            backgroundcolor = active.background,
             rightspinevisible = false,
             topspinevisible = false,
-            xgridcolor = RGBAf(0, 0, 0, 0.10),
-            ygridcolor = RGBAf(0, 0, 0, 0.10),
+            leftspinecolor = active.grid,
+            bottomspinecolor = active.grid,
+            xgridcolor = active.grid,
+            ygridcolor = active.grid,
+            xticklabelcolor = active.muted,
+            yticklabelcolor = active.muted,
+            xlabelcolor = active.muted,
+            ylabelcolor = active.muted,
+            titlecolor = active.foreground,
             xminorticksvisible = true,
             yminorticksvisible = true,
             xminorgridvisible = true,
             yminorgridvisible = true,
-            xminorgridcolor = RGBAf(0, 0, 0, 0.04),
-            yminorgridcolor = RGBAf(0, 0, 0, 0.04),
+            xminorgridcolor = active.minorgrid,
+            yminorgridcolor = active.minorgrid,
             xminorticks = IntervalsBetween(4),
             yminorticks = IntervalsBetween(2),
         ),
-        Legend = (; framevisible = false),
+        Legend = (; framevisible = false, labelcolor = active.foreground),
     )
 end
 

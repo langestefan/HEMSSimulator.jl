@@ -46,6 +46,101 @@ const ASSET_COLOURS = (
 )
 
 """
+    VRM_COLOURS
+
+Flow colours in the style of Victron's VRM portal — orange solar, red grid import, green export,
+blue battery, magenta car, cyan heat pump, lime hot water.
+
+Used by the **dark** theme only, and that split is deliberate. VRM's signature pair is red against
+green, which is the pair red–green colour blindness collapses, so it is the opposite of what
+[`ASSET_COLOURS`](@ref) is for. Keeping it to one theme means the familiar look is available without
+it becoming the only option: [`LIGHT_THEME`](@ref) is the accessible one, and the two carry the same
+information.
+
+Hues are lifted for a dark background — the same red on white reads muddy — so do not reuse this
+table on a light one.
+"""
+const VRM_COLOURS = (
+    pv = "#EFA240",          # solar orange
+    load = "#8C8C8C",        # base load: a backdrop, not a flow to trace
+    var"import" = "#F0656F",  # grid red
+    export_ = "#68C15B",     # to-grid green
+    battery = "#3E9BE0",     # battery blue
+    ev = "#DB86E8",          # car magenta
+    heatpump = "#21C1D6",    # cyan
+    dhw = "#D5DF4B",         # lime
+    curtail = "#6E6E6E",
+    neutral = "#9A9A9A",
+)
+
+"""
+    PlotTheme
+
+Everything a figure needs to be drawn light or dark: the chrome colours, and which flow palette goes
+with them.
+
+Fields are hex strings so this file still loads without Makie. Build one with [`plot_theme`](@ref)
+rather than by hand; [`DARK_THEME`](@ref) and [`LIGHT_THEME`](@ref) are the two that exist.
+"""
+struct PlotTheme
+    name::Symbol
+    background::String   # the figure behind everything
+    panel::String        # cards and inset boxes, one step off the background
+    foreground::String   # text and ticks
+    muted::String        # secondary text: units, axis labels
+    grid::String
+    minorgrid::String
+    cursor::String       # the "now" band
+    colours::NamedTuple
+end
+
+"""
+    DARK_THEME
+
+The VRM look: near-black background, light text, and [`VRM_COLOURS`](@ref).
+"""
+const DARK_THEME = PlotTheme(
+    :dark,
+    "#252526",
+    "#333334",
+    "#E4E4E4",
+    "#9E9E9E",
+    "#3F3F40",
+    "#333334",
+    "#6A6A6A",
+    VRM_COLOURS,
+)
+
+"""
+    LIGHT_THEME
+
+The accessible one: white background, dark text, and the colour-blind-safe [`ASSET_COLOURS`](@ref).
+"""
+const LIGHT_THEME = PlotTheme(
+    :light,
+    "#FFFFFF",
+    "#F4F4F5",
+    "#1A1A1A",
+    "#5C5C5C",
+    "#DCDCDC",
+    "#EFEFEF",
+    "#C4C4C4",
+    ASSET_COLOURS,
+)
+
+"""
+    plot_theme(name::Symbol) -> PlotTheme
+
+`:dark` or `:light`. Anything else throws rather than silently falling back, so a typo in a script
+shows up as an error instead of as the wrong-looking figure.
+"""
+function plot_theme(name::Symbol)
+    name === :dark && return DARK_THEME
+    name === :light && return LIGHT_THEME
+    throw(ArgumentError("theme must be :dark or :light; got :$name"))
+end
+
+"""
     SERIES_COLOURS
 
 Colour cycle for plots with one line per *group* rather than per flow — a scenario, a strategy, a
@@ -308,7 +403,12 @@ it returns data, not drawings.
 """
 state_panels(::AbstractAsset, ::SimulationResult, ::Integer) = StatePanel[]
 
-function state_panels(battery::Battery, result::SimulationResult, index::Integer)
+function state_panels(
+    battery::Battery,
+    result::SimulationResult,
+    index::Integer;
+    colours = ASSET_COLOURS,
+)
     column = _column_for(result, index, :battery_soc_kwh)
     column === nothing && return StatePanel[]
     return [
@@ -317,12 +417,17 @@ function state_panels(battery::Battery, result::SimulationResult, index::Integer
             values = collect(Float64, result.frame[!, column]),
             lower = battery.soc_min * battery.capacity_kwh,
             upper = battery.soc_max * battery.capacity_kwh,
-            colour = ASSET_COLOURS.battery,
+            colour = colours.battery,
         ),
     ]
 end
 
-function state_panels(ev::ElectricVehicle, result::SimulationResult, index::Integer)
+function state_panels(
+    ev::ElectricVehicle,
+    result::SimulationResult,
+    index::Integer;
+    colours = ASSET_COLOURS,
+)
     column = _column_for(result, index, :ev_soc_kwh)
     column === nothing && return StatePanel[]
     horizon = 1:result.grid.n
@@ -334,12 +439,17 @@ function state_panels(ev::ElectricVehicle, result::SimulationResult, index::Inte
             upper = ev.soc_max * ev.capacity_kwh,
             markers = [(k, ev.target_kwh[k]) for k in horizon if ev.target_kwh[k] > 0],
             shade = .!ev.connected[horizon],
-            colour = ASSET_COLOURS.ev,
+            colour = colours.ev,
         ),
     ]
 end
 
-function state_panels(hp::HeatPump, result::SimulationResult, index::Integer)
+function state_panels(
+    hp::HeatPump,
+    result::SimulationResult,
+    index::Integer;
+    colours = ASSET_COLOURS,
+)
     column = _column_for(result, index, :indoor_temp)
     column === nothing && return StatePanel[]
     horizon = 1:result.grid.n
@@ -349,12 +459,17 @@ function state_panels(hp::HeatPump, result::SimulationResult, index::Integer)
             label = "indoor, °C",
             values = collect(Float64, result.frame[!, column]),
             band = (setpoint .- hp.band, setpoint .+ hp.band),
-            colour = ASSET_COLOURS.heatpump,
+            colour = colours.heatpump,
         ),
     ]
 end
 
-function state_panels(tank::WaterTank, result::SimulationResult, index::Integer)
+function state_panels(
+    tank::WaterTank,
+    result::SimulationResult,
+    index::Integer;
+    colours = ASSET_COLOURS,
+)
     column = _column_for(result, index, :dhw_energy_kwh)
     column === nothing && return StatePanel[]
     return [
@@ -363,7 +478,7 @@ function state_panels(tank::WaterTank, result::SimulationResult, index::Integer)
             values = collect(Float64, result.frame[!, column]),
             lower = tank_reserve_kwh(tank),
             upper = tank_capacity_kwh(tank),
-            colour = ASSET_COLOURS.dhw,
+            colour = colours.dhw,
         ),
     ]
 end
@@ -378,15 +493,15 @@ Sources and sinks come from the assets' own [`consumption_columns`](@ref) and
 appears in the plot without the plotting code knowing anything about it, and the picture cannot
 disagree with the accounting.
 """
-function flow_series(result::SimulationResult)
+function flow_series(result::SimulationResult; colours = ASSET_COLOURS)
     frame = result.frame
     sources = Pair{String,Tuple{Vector{Float64},String}}[
-        "PV"=>(frame.pv_available_kw .- frame.curtail_kw, ASSET_COLOURS.pv),
-        "import"=>(collect(Float64, frame.import_kw), ASSET_COLOURS.var"import"),
+        "PV"=>(frame.pv_available_kw .- frame.curtail_kw, colours.pv),
+        "import"=>(collect(Float64, frame.import_kw), colours.var"import"),
     ]
     sinks = Pair{String,Tuple{Vector{Float64},String}}[
-        "export"=>(collect(Float64, frame.export_kw), ASSET_COLOURS.export_),
-        "curtailed"=>(collect(Float64, frame.curtail_kw), ASSET_COLOURS.curtail),
+        "export"=>(collect(Float64, frame.export_kw), colours.export_),
+        "curtailed"=>(collect(Float64, frame.curtail_kw), colours.curtail),
     ]
 
     for (index, asset) in enumerate(result.system.assets)
@@ -399,13 +514,14 @@ function flow_series(result::SimulationResult)
                 all(iszero, values) && continue
                 push!(
                     into,
-                    _flow_label(declared, column) => (values, _flow_colour(declared)),
+                    _flow_label(declared, column) =>
+                        (values, _flow_colour(declared, colours)),
                 )
             end
         end
     end
     # The base load is a sink like any other, and always present.
-    push!(sinks, "base load" => (collect(Float64, frame.load_kw), ASSET_COLOURS.load))
+    push!(sinks, "base load" => (collect(Float64, frame.load_kw), colours.load))
     return (; sources, sinks)
 end
 
@@ -419,13 +535,13 @@ function _flow_label(declared::Symbol, column::Symbol)
     return "$text ($suffix)"
 end
 
-function _flow_colour(column::Symbol)
+function _flow_colour(column::Symbol, colours = ASSET_COLOURS)
     name = string(column)
-    startswith(name, "battery") && return ASSET_COLOURS.battery
-    startswith(name, "ev") && return ASSET_COLOURS.ev
-    startswith(name, "heatpump") && return ASSET_COLOURS.heatpump
-    startswith(name, "dhw") && return ASSET_COLOURS.dhw
-    return ASSET_COLOURS.neutral
+    startswith(name, "battery") && return colours.battery
+    startswith(name, "ev") && return colours.ev
+    startswith(name, "heatpump") && return colours.heatpump
+    startswith(name, "dhw") && return colours.dhw
+    return colours.neutral
 end
 
 """
@@ -658,14 +774,25 @@ the car or the heat pump.
 Needs a Makie backend that can open a window and handle events: **GLMakie**. Under a file-writing
 backend the figure still builds, but nothing responds.
 
+# Layout
+
+Modelled on Victron's VRM portal, top to bottom: **energy prices** as steps, the **energy** stack as
+bars, one panel per asset state, the window sliders, and a row of cards for the window's totals. Each
+plot writes its unit horizontally above the axis rather than rotated beside it, and carries a
+horizontal legend underneath.
+
+Bars rather than filled bands because that is what the quantity is — an interval's energy, not a
+value sampled at an instant — and steps rather than a line for the price, because a quarter-hour
+tariff is flat across its interval and jumps at the boundary.
+
 # Controls
 
   - **day** and **width** sliders move the window over the horizon. Free — no resimulation.
   - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Every
     combination is simulated *before the window opens* — see `precompute` — so switching is instant.
   - **toggles** filter the dispatch stack. State panels always show every asset.
-  - a **KPI block** recomputed for the visible window: energy in and out, self-consumption, and what
-    that window cost at the dispatch price.
+  - **cards** recomputed for the visible window: from the grid, to the grid, PV used, and what that
+    window cost at the dispatch price.
 
 # Arguments
 
@@ -675,6 +802,10 @@ backend the figure still builds, but nothing responds.
   - `strategies`: a `NamedTuple` of [`AbstractStrategy`](@ref) to offer, or `nothing` to use only
     the one already in `options`. Strategy lives in [`RunOptions`](@ref) rather than in the
     contract, so it needs its own menu to be comparable side by side.
+  - `theme = :dark`: `:dark` or `:light`, switchable live from the **theme** menu. The two are not
+    the same picture in different clothes — dark uses [`VRM_COLOURS`](@ref) to match the portal, light
+    uses the colour-blind-safe [`ASSET_COLOURS`](@ref). Take a screenshot for anyone who has to read
+    it from the light one.
   - `precompute = true`: simulate every scenario × candidate × strategy up front, threaded, before
     the window opens. **Do not turn this off for a long horizon.** Solving on first selection sounds
     cheaper, but the solve runs inside the menu's event callback: for however long it takes, GLMakie
@@ -688,11 +819,34 @@ interactive view cannot drift away from the figures you put in a report.
 function dashboard end
 
 """
+    price_plot(result; days = 1:3, colours = ASSET_COLOURS, now = nothing, kwargs...)
+    price_plot!(axis, result; kwargs...)
+
+The buy and sell price over a window, as **steps**.
+
+Steps rather than a line because that is what a tariff is: a quarter-hour price is flat across its
+interval and jumps at the boundary, and joining the points with a slope draws a price nobody was ever
+charged. These are the *dispatch* prices — what the optimizer saw — not the bill; see
+[`dispatch_prices`](@ref) and [`settle`](@ref) for why those differ.
+
+`now` marks an instant with a shaded band. A simulation has no now, so it is opt-in rather than
+derived.
+
+Pairs with [`dispatch_plot`](@ref): price on top, energy below, sharing an x-axis, is the layout
+[`dashboard`](@ref) uses.
+"""
+function price_plot end
+function price_plot! end
+
+"""
     hems_theme() -> Makie.Theme
 
 An opt-in theme: muted grid, no top or right spine, a serif-free stack, and the package's own colour
 cycle. Nothing applies it for you — `set_theme!(hems_theme())` if you want it, and every plot works
 without it.
+
+Takes `:light` (the default) or `:dark`; see [`plot_theme`](@ref). The dark one uses
+[`VRM_COLOURS`](@ref) for its `palette`, matching what [`dashboard`](@ref) draws.
 
 Requires Makie.
 """

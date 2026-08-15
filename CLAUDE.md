@@ -291,7 +291,15 @@ be plain Julia lives in the package: `ASSET_COLOURS`, `interval_range` / `plot_b
 `block_mean`, and `state_panels`. So the logic most likely to be wrong loads without a plotting
 stack.
 
-Four design points worth not undoing:
+**There are two palettes, and which one you get is the theme.** `ASSET_COLOURS` is Okabe–Ito and
+colour-blind safe; `VRM_COLOURS` copies Victron's portal, whose signature pair is red against green —
+exactly what red–green colour blindness collapses. Dark uses VRM, light uses Okabe–Ito, and
+`plot_theme(:dark | :light)` is the only way to pick. Do not "unify" them: the split is what lets the
+familiar look exist without becoming the only option. Anything that resolves a colour must take a
+colour table (`flow_series`, `state_panels`, `dispatch_plot!`, `price_plot!` all do) rather than
+reaching for `ASSET_COLOURS` directly, or it will draw the wrong palette the moment the theme changes.
+
+Five design points worth not undoing:
 
 - **`ASSET_COLOURS` is the Okabe–Ito palette, and the assignment within it is not free.** The set is
   chosen so every pair survives protanopia, deuteranopia and tritanopia; picking a "nicer" hex for one
@@ -311,6 +319,12 @@ Four design points worth not undoing:
 - **`state_panels` is per-asset on purpose.** Limits are not derivable from the contract: a
   battery's are constant fractions of capacity, a car's are deadlines at instants, a house's move
   every interval. An asset without a method is simply absent from the plot rather than wrong in it.
+- **The theme switch recolours, it does not rebuild.** `_apply_theme!` sets chrome attributes on the
+  existing blocks and `refresh` redraws the plots from `palette[]`, so switching costs a redraw
+  rather than a figure. The one thing it *does* rebuild is the legends, because a legend entry bakes
+  in its swatch colour and the swatch is precisely what changed. If you add a legend, rebuild it
+  there — and derive its colours from `palette[].colours`, not from a `flow_series` captured at
+  build time, which is a bug this already had once.
 
 `dashboard` is the interactive one: it **reuses `dispatch_plot!` and `state_plot!` and redraws on
 change** rather than being rebuilt around observables, so the interactive view and the static

@@ -52,6 +52,11 @@ save(joinpath(output, "dispatch.png"), dispatch_plot(result; days = 1:3))
 # the axis label says so, rather than drawing 35 000 unreadable points.
 save(joinpath(output, "dispatch-fortnight.png"), dispatch_plot(result; days = :))
 
+# The other half of the VRM-style pair: what the controller was paying. Steps rather than a line,
+# because a quarter-hour tariff is flat across its interval and jumps at the boundary — joining the
+# points with a slope would draw a price nobody was charged.
+save(joinpath(output, "price.png"), price_plot(result; days = 1:3))
+
 # State, one panel per stored quantity against the limits it has to respect: SoC bounds, the EV's
 # departure targets and away periods, the comfort band, the tank's reserve. This is the picture of
 # what the integration tests assert numerically.
@@ -85,9 +90,15 @@ with_battery = settle(
 )
 save(joinpath(output, "bill.png"), bill_plot(with_battery; baseline))
 
-# The theme is opt-in and nothing applies it for you.
-set_theme!(hems_theme())
+# The theme is opt-in and nothing applies it for you. `:dark` is the VRM palette the dashboard opens
+# with; `:light` is the colour-blind-safe one.
+set_theme!(hems_theme(:light))
 save(joinpath(output, "sweep-themed.png"), sweep_plot(table))
+set_theme!(hems_theme(:dark))
+save(
+    joinpath(output, "dispatch-dark.png"),
+    dispatch_plot(result; days = 1:3, colours = VRM_COLOURS),
+)
 set_theme!()
 
 println("wrote ", length(readdir(output)), " figures to ", output)

@@ -66,7 +66,8 @@ end
 
 Add `n` units of work and redraw if enough time has passed. Safe to call from several threads.
 """
-step!(bar::ProgressBar, n::Integer = 1) = _draw(bar, Threads.atomic_add!(bar.done, Int(n)) + n)
+step!(bar::ProgressBar, n::Integer = 1) =
+    _draw(bar, Threads.atomic_add!(bar.done, Int(n)) + n)
 
 # Reporting an absolute count, which is what `simulate`'s hook gives, is the same bar driven from one
 # thread. Keep the atomic in step so a later `step!` does not go backwards.
