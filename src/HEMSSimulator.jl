@@ -162,6 +162,6 @@ export flow_table, state_table
 export ASSET_COLOURS, interval_range, Intervals
 
 # Synthetic inputs
-export synthetic_weather, synthetic_load, synthetic_prices, clearsky_ghi
+export synthetic_weather, synthetic_load, synthetic_prices, baseload, clearsky_ghi
 
 end

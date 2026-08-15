@@ -40,11 +40,24 @@ weather = synthetic_weather(grid, site)
 load = synthetic_load(grid; annual_kwh = 3500)
 prices = synthetic_prices(grid)
 
+# `baseload` is the alternative parameterisation of the same input: a standing draw specified as a
+# mean power rather than an annual energy, near-flat with an evening peak, and with no seasonal or
+# weekday variation — so `average_kw` is what *any* day of the horizon consumes. Use one or the
+# other; summing them gives a house that consumes both.
+standing = baseload(grid; average_kw = 0.3)
+
 header("Inputs")
 println(
     "irradiation this month: ",
     round(sum(weather.ghi) * hours(grid) / 1000, digits = 1),
     " kWh/m²",
+)
+println(
+    "household load: ",
+    round(sum(load) * hours(grid), digits = 1),
+    " kWh this month, against ",
+    round(sum(standing) * hours(grid), digits = 1),
+    " kWh for a flat 0.3 kW standing draw",
 )
 
 # The contract turns wholesale prices into what the household actually pays and receives.
