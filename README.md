@@ -18,6 +18,9 @@ That script is the walkthrough: a Dutch home with PV, a battery, an EV, a heat p
 tank, billed under the four Dutch regulatory scenarios and swept for the battery size worth buying.
 It runs on synthetic weather and prices, so it needs no data files and no credentials.
 
+For figures — dispatch, state trajectories, the sizing sweep, the bill — add CairoMakie and run
+`examples/plots.jl`. Plotting is a package extension, so Makie is only loaded if you ask for it.
+
 The API is documented in docstrings — `?` in the REPL is the reference.
 
 ## How to Cite

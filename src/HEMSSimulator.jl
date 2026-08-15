@@ -99,6 +99,9 @@ include("io/csv.jl")            # measured inputs from a file
 include("io/synthetic.jl")      # generators so examples and tests need no data files
 
 include("core/show.jl")
+include("plots.jl")         # stubs; the methods live in ext/HEMSSimulatorMakieExt.jl
+
+__init__() = _register_plot_hint()
 
 # Time and weather
 export TimeGrid, Site, Weather
@@ -148,6 +151,12 @@ export openmeteo_weather, openmeteo_url, openmeteo_parse, resample_weather
 export entsoe_prices, parse_entsoe_prices
 export read_inputs, validate_inputs, INPUT_COLUMNS
 export get_cache, set_cache, clear_cache!
+
+# Plotting (methods require Makie, e.g. `using CairoMakie`)
+export dispatch_plot, dispatch_plot!, state_plot, state_plot!
+export sweep_plot, sweep_plot!, bill_plot, bill_plot!
+export hems_theme, StatePanel, state_panels, flow_series, bill_components
+export ASSET_COLOURS, interval_range
 
 # Synthetic inputs
 export synthetic_weather, synthetic_load, synthetic_prices, clearsky_ghi

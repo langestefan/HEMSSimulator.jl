@@ -53,8 +53,9 @@ ones above it.
 | `assets/` | Controllable assets: `battery.jl`, `ev.jl`, `heatpump.jl`, `dhw.jl` |
 | `market/` | `Contract` and grid tariffs, `NL_TARIFFS_2025`, the four `scenarios`, the settlement engine, NPV/IRR/payback |
 | `model/` | `HomeSystem`/`SimulationInputs`, the JuMP window model, `SimulationResult`, the rolling-horizon driver |
-| `analysis/` | The sizing sweep |
+| `analysis/` | The sizing sweep and the idealised sizing LP |
 | `io/` | Response cache, Open-Meteo and ENTSO-E loaders, CSV schema, synthetic generators |
+| `plots.jl` | Plotting: colours, window arithmetic, per-asset state descriptions — **stubs only**, see below |
 
 ### Adding an asset
 
@@ -251,12 +252,42 @@ The two `:validation` suites are worth knowing about:
 to the candidate grid, and a home with PV and no storage must self-consume about 30% of what it
 generates. A fortnight annualised can produce almost any optimum; a year cannot.
 
+## Plotting
+
+The plotting functions are **documented stubs** in `src/plots.jl`; their methods live in
+`ext/HEMSSimulatorMakieExt.jl` and appear when Makie is loaded (`using CairoMakie`). Makie is a
+`[weakdeps]` entry, never a dependency: its precompile is about three minutes against seconds for
+everything else combined, and nobody should pay that to run a simulation.
+
+The split is deliberate about *what* goes where. The extension is only drawing. Everything that can
+be plain Julia lives in the package: `ASSET_COLOURS`, `interval_range` / `plot_blocks` /
+`block_mean`, and `state_panels`. So the logic most likely to be wrong loads without a plotting
+stack.
+
+Two design points worth not undoing:
+
+- **`flow_series` reads `consumption_columns` / `production_columns`** — the same declarations
+  `balance_residual` uses. A new asset therefore appears in the dispatch plot with no change here,
+  and the picture cannot disagree with the accounting. A legend suffix is taken from the *resolved
+  frame column*, not the asset index, so only a genuine duplicate gets one.
+- **`state_panels` is per-asset on purpose.** Limits are not derivable from the contract: a
+  battery's are constant fractions of capacity, a car's are deadlines at instants, a house's move
+  every interval. An asset without a method is simply absent from the plot rather than wrong in it.
+
+Calling a plot function without Makie gives a `MethodError` plus a registered error hint naming
+CairoMakie — see `_register_plot_hint`, wired from `__init__`.
+
+**There are no plotting tests, by choice**, to keep CI fast. `examples/plots.jl` renders all seven
+figures and is the smoke test: run it after touching either file and look at the output. The pure
+helpers in `src/plots.jl` could be tested at no CI cost whenever that seems worth doing.
+
 ## Documentation
 
 There is **no Documenter site**. It was removed: the deploy never worked without a `DOCUMENTER_KEY`,
 and the reference page was a single `@autodocs` dump nobody read. The API is documented in
 docstrings, reachable with `?` in the REPL, and everything narrative lives in one of two places:
 
+- `examples/plots.jl` — every figure the package can draw. Needs CairoMakie; see Plotting above.
 - `examples/tutorial.jl` — a runnable walkthrough of the whole package, from a `HomeSystem` through
   the four scenarios, the sizing sweep and LP bound, to the EV, heat pump and hot water tank. Prose
   is comments; every number it prints is computed when you run it. Keep it running — it is the only

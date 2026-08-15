@@ -69,6 +69,11 @@ and this project adheres to [Semantic Versioning].
 - Validation suites: transposition against 72 pinned pvlib-python reference values, and a JET
   analysis asserting no error path is located in this package's own source.
 
+- Plotting through a Makie package extension: `dispatch_plot`, `state_plot`, `sweep_plot` and
+  `bill_plot`, each with a mutating form that draws into an axis you supply, plus an opt-in
+  `hems_theme`. Makie is a weak dependency, so `using HEMSSimulator` stays fast; `using CairoMakie`
+  brings the methods in. `examples/plots.jl` renders all of them.
+
 ### Removed
 
 - The Documenter site and the `docs/` tree. The deploy never worked without a `DOCUMENTER_KEY` and

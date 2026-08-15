@@ -41,8 +41,11 @@ load = synthetic_load(grid; annual_kwh = 3500)
 prices = synthetic_prices(grid)
 
 header("Inputs")
-println("irradiation this month: ", round(sum(weather.ghi) * hours(grid) / 1000, digits = 1),
-        " kWh/m²")
+println(
+    "irradiation this month: ",
+    round(sum(weather.ghi) * hours(grid) / 1000, digits = 1),
+    " kWh/m²",
+)
 
 # The contract turns wholesale prices into what the household actually pays and receives.
 
@@ -67,7 +70,19 @@ result = simulate(home, weather, load, contract)
 header("Simulating")
 println(result)
 println()
-println(first(select(result.frame, :timestamp, :load_kw, :pv_available_kw, :import_kw, :export_kw), 4))
+println(
+    first(
+        select(
+            result.frame,
+            :timestamp,
+            :load_kw,
+            :pv_available_kw,
+            :import_kw,
+            :export_kw,
+        ),
+        4,
+    ),
+)
 
 # ---------------------------------------------------------------------------------------------
 # Billing
@@ -83,12 +98,8 @@ println(settle(result, contract))
 # expresses a phase-out: `net_metering_fraction = 0.36` is a year in which just over a third of
 # exported energy is still netted.
 
-without_netting = Contract(
-    grid;
-    commodity = prices .+ 0.02,
-    feed_in = 0.04,
-    net_metering_fraction = 0.0,
-)
+without_netting =
+    Contract(grid; commodity = prices .+ 0.02, feed_in = 0.04, net_metering_fraction = 0.0)
 println()
 println(settle(simulate(home, weather, load, without_netting), without_netting))
 
@@ -133,7 +144,16 @@ println(keys(regimes))
 # it here and not there makes the LP under-size. Wear belongs in `Investment`.
 
 header("A bound before you sweep")
-println(size_lp(home, weather, load, without_netting; capex_per_kwh = 450.0, capex_fixed = 1000.0))
+println(
+    size_lp(
+        home,
+        weather,
+        load,
+        without_netting;
+        capex_per_kwh = 450.0,
+        capex_fixed = 1000.0,
+    ),
+)
 
 # ---------------------------------------------------------------------------------------------
 # Sizing the battery
@@ -142,7 +162,7 @@ println(size_lp(home, weather, load, without_netting; capex_per_kwh = 450.0, cap
 # That costs more solves, but every candidate is then judged under the real billing rules —
 # including the annual netting cap, which an investment LP cannot see.
 
-candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in 2.5:2.5:15.0]
+candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:15.0]
 investment =
     b -> Investment(
         capex = 1000 + 450 * b.capacity_kwh,
@@ -153,7 +173,9 @@ investment =
 table = sweep(home, weather, load, without_netting, candidates; investment)
 
 header("Sizing the battery")
-println(select(table, :capacity_kwh, :annual_savings, :npv, :payback_years, :cycles_per_year))
+println(
+    select(table, :capacity_kwh, :annual_savings, :npv, :payback_years, :cycles_per_year),
+)
 
 # `best` returns the winning row and warns when the optimum sits at the edge of the candidate
 # range, which usually means the range did not bracket it. Over a full year with these assumptions
@@ -173,7 +195,7 @@ across = sweep(
     weather,
     load,
     regimes,
-    [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in 2.5:2.5:10.0];
+    [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:10.0];
     investment,
 )
 
@@ -186,7 +208,15 @@ println(select(across, :scenario, :capacity_kwh, :annual_savings, :npv))
 # That table is the deliverable. What a battery is worth is not one number but four, and on the
 # package's own synthetic data they differ by more than any single modelling assumption in it.
 println()
-println(select(best_by_scenario(across), :scenario, :capacity_kwh, :annual_savings, :payback_years))
+println(
+    select(
+        best_by_scenario(across),
+        :scenario,
+        :capacity_kwh,
+        :annual_savings,
+        :payback_years,
+    ),
+)
 
 # ---------------------------------------------------------------------------------------------
 # Adding a car
@@ -216,9 +246,16 @@ println("charged ", round(ev_energy_kwh(car_run), digits = 1), " kWh")
 # than adding its consumption to the base load — the optimizer moves the charging to the cheap
 # hours, but only within the window before each deadline.
 
-paid = sum(car_run.frame.ev_charge_kw .* car_run.frame.price_buy) / sum(car_run.frame.ev_charge_kw)
-println("paid ", round(paid, digits = 4), " €/kWh against an average of ",
-        round(mean(car_run.frame.price_buy[ev.connected]), digits = 4), " while plugged in")
+paid =
+    sum(car_run.frame.ev_charge_kw .* car_run.frame.price_buy) /
+    sum(car_run.frame.ev_charge_kw)
+println(
+    "paid ",
+    round(paid, digits = 4),
+    " €/kWh against an average of ",
+    round(mean(car_run.frame.price_buy[ev.connected]), digits = 4),
+    " while plugged in",
+)
 
 # Sizing a battery for this home keeps the car in both arms of the comparison, so what is reported
 # is what the battery adds on top of a car that was already shifting its own load.
@@ -230,10 +267,14 @@ println("paid ", round(paid, digits = 4), " €/kWh against an average of ",
 # understates what the larger battery would do.
 
 println()
-println(select(
-    sweep(with_car, weather, load, without_netting, candidates; investment),
-    :capacity_kwh, :annual_savings, :npv,
-))
+println(
+    select(
+        sweep(with_car, weather, load, without_netting, candidates; investment),
+        :capacity_kwh,
+        :annual_savings,
+        :npv,
+    ),
+)
 
 # ---------------------------------------------------------------------------------------------
 # Heating the house
@@ -249,8 +290,13 @@ println(select(
 building = BuildingSpec(120.0; heat_loss_kw = 6.0)     # 120 m², 6 kW at ΔT = 30 K
 
 header("Heating the house")
-println("conductance ", round(heat_loss_coefficient(building), digits = 3), " kW/K,  envelope ",
-        round(building.C_e, digits = 1), " kWh/K")
+println(
+    "conductance ",
+    round(heat_loss_coefficient(building), digits = 3),
+    " kW/K,  envelope ",
+    round(building.C_e, digits = 1),
+    " kWh/K",
+)
 
 # The flexibility is the comfort band. Inside `setpoint ± band` the optimizer may put the
 # temperature wherever it likes, so it can warm the fabric through a cheap mild afternoon and coast
@@ -280,10 +326,18 @@ smart = heated(:optimized)
 dumb = heated(:thermostat)
 cost(run) = sum(run.frame.heatpump_kw .* run.frame.price_buy) * hours(grid)
 
-println("thermostat ", round(heat_demand_kwh(dumb), digits = 1), " kWh for €",
-        round(cost(dumb), digits = 2))
-println("optimized  ", round(heat_demand_kwh(smart), digits = 1), " kWh for €",
-        round(cost(smart), digits = 2))
+println(
+    "thermostat ",
+    round(heat_demand_kwh(dumb), digits = 1),
+    " kWh for €",
+    round(cost(dumb), digits = 2),
+)
+println(
+    "optimized  ",
+    round(heat_demand_kwh(smart), digits = 1),
+    " kWh for €",
+    round(cost(smart), digits = 2),
+)
 
 # Over this March the optimizer buys about 8% fewer kWh and pays about 24% less for them. The two
 # effects are separable and both real: it heats when the COP is better, and it heats when
@@ -304,7 +358,8 @@ println("optimized  holds ", round.(extrema(smart.frame.indoor_temp), digits = 2
 #
 # A night setback is a change to the setpoint, not to the model.
 
-setback = [(Dates.hour(t) >= 23 || Dates.hour(t) < 6) ? 17.0 : 20.0 for t in timestamps(grid)]
+setback =
+    [(Dates.hour(t) >= 23 || Dates.hour(t) < 6) ? 17.0 : 20.0 for t in timestamps(grid)]
 night = simulate(
     HomeSystem(
         site = site,
@@ -319,8 +374,13 @@ night = simulate(
 )
 
 println("steady  ", round(heat_demand_kwh(smart), digits = 1), " kWh")
-println("setback ", round(heat_demand_kwh(night), digits = 1), " kWh, ",
-        round(discomfort_kh(night; side = :cold), digits = 3), " cold degree-hours")
+println(
+    "setback ",
+    round(heat_demand_kwh(night), digits = 1),
+    " kWh, ",
+    round(discomfort_kh(night; side = :cold), digits = 3),
+    " cold degree-hours",
+)
 
 # ---------------------------------------------------------------------------------------------
 # Hot water
@@ -347,9 +407,15 @@ println("shortfall ", round(dhw_shortfall_kwh(tank_run), digits = 3), " kWh")
 # The gap between the heat drawn and the electricity bought is the COP; the gap between heat *in*
 # and heat drawn is standing loss. And as with the car, the flexibility shows up in what it pays.
 
-println("paid ", round(sum(tank_run.frame.dhw_kw .* tank_run.frame.price_buy) /
-                       sum(tank_run.frame.dhw_kw), digits = 4),
-        " €/kWh against an average of ", round(mean(tank_run.frame.price_buy), digits = 4))
+println(
+    "paid ",
+    round(
+        sum(tank_run.frame.dhw_kw .* tank_run.frame.price_buy) / sum(tank_run.frame.dhw_kw),
+        digits = 4,
+    ),
+    " €/kWh against an average of ",
+    round(mean(tank_run.frame.price_buy), digits = 4),
+)
 
 # `dhw_draw` builds the profile — two Gaussian peaks and a trickle — and you can pass your own
 # series instead. The same type models a resistive immersion tank with
