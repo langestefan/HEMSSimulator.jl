@@ -96,6 +96,7 @@ include("model/system.jl")      # the home and its precomputed exogenous series
 include("model/dispatch.jl")    # the JuMP model for one window
 include("model/results.jl")     # what a simulation produces
 include("model/rolling.jl")     # the receding-horizon driver
+include("model/attribution.jl") # where each kWh came from and went
 
 include("market/settlement.jl") # the Dutch bill, computed from the flows
 include("market/economics.jl")  # NPV, IRR, payback
@@ -146,6 +147,7 @@ export consumption_columns, production_columns
 export SimulationResult, simulate, build_window, solve_window
 export imported_kwh, exported_kwh, produced_kwh, consumed_kwh
 export self_consumption, self_sufficiency, balance_residual, onsite_sinks, onsite_supply
+export energy_flows, solar_use, source_mix
 
 # Tariffs and settlement
 export AbstractGridTariff, FixedCapacityTariff, TimeVaryingGridTariff, Contract
