@@ -248,3 +248,43 @@ end
         @test serial[!, column] ≈ parallel[!, column]
     end
 end
+
+@testitem "Savings per kWh is what ranks the sizes" tags = [:integration, :slow] begin
+    using Dates: DateTime
+
+    site = Site(52.1, 5.18)
+    grid = TimeGrid(DateTime(2024, 4, 1), 96 * 14)
+    weather = synthetic_weather(grid, site; seed = 21)
+    load = synthetic_load(grid; annual_kwh = 3000)
+    prices = synthetic_prices(grid; seed = 23)
+    home = HomeSystem(
+        site = site,
+        pv = [
+            PVArray(dc_capacity_kwp = 4.0, ac_capacity_kw = 3.6, tilt = 35, azimuth = 180),
+        ],
+    )
+    contract = Contract(
+        grid;
+        commodity = prices .+ 0.02,
+        feed_in = 0.04,
+        net_metering_fraction = 0.0,
+    )
+    candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh = 2.5:2.5:15.0]
+
+    table = sweep(
+        home,
+        weather,
+        load,
+        contract,
+        candidates;
+        investment = b -> Investment(capex = 1000 + 450 * b.capacity_kwh),
+    )
+
+    @test table.savings_per_kwh ≈ table.annual_savings ./ table.capacity_kwh
+    # Total savings rise steeply and then saturate — they never say when to stop, and past the
+    # saturation point they can even tick down as the degradation cost outweighs the last kWh of
+    # arbitrage. The per-kWh figure falls monotonically, and that is the one that ranks sizes.
+    @test table.annual_savings[end] > table.annual_savings[1]
+    @test issorted(table.savings_per_kwh; rev = true)
+    @test table.savings_per_kwh[1] > 2 * table.savings_per_kwh[end]
+end

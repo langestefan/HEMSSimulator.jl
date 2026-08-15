@@ -20,8 +20,14 @@ abstract type AbstractResampler end
 """
     StepHold()
 
-The sample stamped at `t` applies unchanged over `[t, t + step)`. Use for prices, and for any
-quantity reported as a per-interval average that must not be smoothed.
+The sample stamped at `t` applies until the next sample. Use for prices, and for any quantity
+reported as a per-interval average that must not be smoothed.
+
+Unlike [`LinearInterp`](@ref) this does **not** require a uniformly sampled source, because it does
+not need one: each sample holds until the next, whatever the gap. That matters for real market data
+— the Dutch day-ahead moved from an hourly to a quarter-hourly market time unit during 2025, so a
+single year comes back with two resolutions in it. The final sample is assumed to hold for as long
+as the one before it, which is the only assumption available and the conventional one.
 """
 struct StepHold <: AbstractResampler end
 
@@ -44,6 +50,10 @@ strictly increasing or not uniformly spaced.
 Uniformity is required rather than repaired. A gap in a weather download or a daylight-saving jump
 in a CSV written in local time is a data problem, and silently interpolating across it would hide a
 missing day inside an annual energy figure that still looks plausible.
+
+Only the resamplers that need uniformity call this — [`LinearInterp`](@ref), whose midpoint
+arithmetic assumes it, and [`upsample_irradiance`](@ref), which groups fine intervals by source
+interval. [`StepHold`](@ref) does not.
 """
 function source_step(times::AbstractVector{DateTime})
     length(times) >= 2 || throw(
@@ -76,6 +86,26 @@ end
 Timestamp one step past the last interval, i.e. the exclusive end of the horizon `[start, stop)`.
 """
 stop(grid::TimeGrid) = grid.start + grid.step * grid.n
+
+"""
+    checkincreasing(times::AbstractVector{DateTime})
+
+Throw unless `times` has at least two entries and is strictly increasing. The weaker precondition
+[`StepHold`](@ref) needs, where [`source_step`](@ref) would be too strict.
+"""
+function checkincreasing(times::AbstractVector{DateTime})
+    length(times) >= 2 ||
+        throw(ArgumentError("need at least two timestamps, got $(length(times))"))
+    for i = 2:length(times)
+        times[i] > times[i-1] || throw(
+            ArgumentError(
+                "timestamps must be strictly increasing, but times[$(i - 1)] = " *
+                "$(times[i - 1]) and times[$i] = $(times[i])",
+            ),
+        )
+    end
+    return nothing
+end
 
 # The source is required to cover the horizon in the step-hold sense: its first sample must start no
 # later than the grid, and its last sample must still be in force at the end of the grid. Linear
@@ -137,14 +167,24 @@ function resample(
 )
     length(times) == length(values) ||
         throw(ArgumentError("got $(length(times)) timestamps but $(length(values)) values"))
-    step = source_step(times)
-    _check_coverage(times, step, grid, "the source series")
-    step_ms = step.value
-    origin = times[1]
+    checkincreasing(times)
+    # The last sample has no successor to bound it, so give it the duration of the one before.
+    _check_coverage(
+        times,
+        Millisecond(times[end] - times[end-1]),
+        grid,
+        "the source series",
+    )
+
     out = Vector{Float64}(undef, grid.n)
+    # Both sequences are increasing, so one pass with a running cursor beats a search per interval.
+    cursor = 1
     for k = 1:grid.n
-        offset = Millisecond(timestamp(grid, k) - origin).value
-        out[k] = values[fld(offset, step_ms)+1]
+        t = timestamp(grid, k)
+        while cursor < length(times) && times[cursor+1] <= t
+            cursor += 1
+        end
+        out[k] = values[cursor]
     end
     return out
 end

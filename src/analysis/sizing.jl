@@ -17,8 +17,10 @@ with the candidate **added** to its assets. So a home that already has an EV kee
 and the reported saving is what the battery adds on top, not what the battery and the car do
 together. Pass a system with no assets for the plain no-battery baseline.
 
-Returns one row per candidate with the candidate's size, its bill, and its KPIs. An optimum sitting
-at the edge of `candidates` means the grid was too narrow — widen it and rerun.
+Returns one row per candidate with the candidate's size, its bill, and its KPIs — including
+`savings_per_kwh`, the annual saving divided by the capacity bought, which is the column that says
+when to stop growing the battery. An optimum sitting at the edge of `candidates` means the grid was
+too narrow — widen it and rerun.
 
 # Examples
 
@@ -71,15 +73,19 @@ function _sweep_row(system, inputs, contract, candidate, baseline_bill, investme
     result = simulate(case_system, inputs; options)
     bill = settle(result, contract)
     metrics = kpis(baseline_bill, bill, investment(candidate); result)
+    capacity = candidate isa Battery ? candidate.capacity_kwh : NaN
     return merge(
         (;
-            capacity_kwh = candidate isa Battery ? candidate.capacity_kwh : NaN,
+            capacity_kwh = capacity,
             power_kw = candidate isa Battery ? candidate.discharge_power_kw : NaN,
             capex = investment(candidate).capex,
             annual_bill = annualise(bill),
             imported_kwh = bill.imported_kwh,
             exported_kwh = bill.exported_kwh,
             netted_kwh = bill.netted_kwh,
+            # Annual saving per kWh of battery bought. The one that actually ranks sizes: total
+            # savings always rise with capacity, so they never say when to stop.
+            savings_per_kwh = capacity > 0 ? metrics.annual_savings / capacity : NaN,
         ),
         metrics,
     )

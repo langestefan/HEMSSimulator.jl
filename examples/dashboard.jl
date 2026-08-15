@@ -38,7 +38,8 @@ home = HomeSystem(
 )
 
 regimes = scenarios(grid; commodity = prices .+ 0.02, feed_in = 0.04)
-candidates = [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in (2.5, 5.0, 10.0, 15.0)]
+candidates =
+    [Battery(kwh, kwh / 2; degradation_cost = 0.05) for kwh in (2.5, 5.0, 10.0, 15.0)]
 
 app = dashboard(home, weather, load, regimes, candidates)
 

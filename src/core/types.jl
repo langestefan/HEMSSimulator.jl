@@ -132,9 +132,12 @@ How a simulation is run: the rolling-horizon geometry, the solver, and the model
 
 # Fields
 
-  - `window_hours::Int`: length of each optimization window. The default 48 h with a 24 h step means
-    every day is optimized with a day of lookahead and only the first day is implemented.
-  - `step_hours::Int`: how far the horizon advances per solve, i.e. how much of each window is kept.
+  - `window_hours::Float64`: length of each optimization window. The default 48 h with a 24 h step
+    means every day is optimized with a day of lookahead and only the first day is implemented.
+  - `step_hours::Float64`: how far the horizon advances per solve, i.e. how much of each window is
+    kept. Fractional values are the realistic controller: `step_hours = 0.25` re-optimizes every
+    interval, which is what a real MPC does — and costs one solve per interval of the horizon
+    rather than one per day, so a year goes from 366 solves to 35 040.
   - `optimizer`: a solver factory, passed straight to `JuMP.Model`. Never hardcoded.
   - `exclusive::Bool`: add binaries forbidding simultaneous charge and discharge. Off by default;
     see the note on LP degeneracy in [`solve_window`](@ref).
@@ -146,16 +149,39 @@ How a simulation is run: the rolling-horizon geometry, the solver, and the model
     simultaneously charges and discharges.
   - `silent::Bool`: suppress solver output.
 """
-Base.@kwdef struct RunOptions{O}
-    window_hours::Int = 48
-    step_hours::Int = 24
-    optimizer::O = HiGHS.Optimizer
-    exclusive::Bool = false
-    terminal_value::Bool = true
-    price_epsilon::Float64 = 1.0e-4
-    check_degeneracy::Bool = true
-    silent::Bool = true
+struct RunOptions{O}
+    window_hours::Float64
+    step_hours::Float64
+    optimizer::O
+    exclusive::Bool
+    terminal_value::Bool
+    price_epsilon::Float64
+    check_degeneracy::Bool
+    silent::Bool
 end
+
+# Written out rather than `@kwdef` so that the hours accept any `Real`: `step_hours = 0.25` and
+# `window_hours = 24` are both natural to type, and `@kwdef` on a parametric struct passes keywords
+# through untouched, so an `Int` would miss the constructor.
+RunOptions(;
+    window_hours::Real = 48.0,
+    step_hours::Real = 24.0,
+    optimizer = HiGHS.Optimizer,
+    exclusive::Bool = false,
+    terminal_value::Bool = true,
+    price_epsilon::Real = 1.0e-4,
+    check_degeneracy::Bool = true,
+    silent::Bool = true,
+) = RunOptions(
+    float(window_hours),
+    float(step_hours),
+    optimizer,
+    exclusive,
+    terminal_value,
+    float(price_epsilon),
+    check_degeneracy,
+    silent,
+)
 
 """
     DispatchContext
