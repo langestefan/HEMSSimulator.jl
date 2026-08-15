@@ -531,17 +531,32 @@ function HEMSSimulator.dashboard(
         font = :regular,
     )
 
+    # Makie blanks a menu's `selection` to `nothing` whenever its `i_selected` reaches 0 — an options
+    # update does it, and it is reachable by setting `i_selected` directly. `findfirst` then returns
+    # `nothing`, and the next thing to touch it is a `MethodError` inside an event callback, which
+    # takes the window down rather than printing. A blank menu has not asked for anything, so hold
+    # the last good choice instead of crashing on it.
+    last_choice = Ref((1, 1, 1))
+
+    function _chosen(menu, names, previous::Int)
+        menu === nothing && return previous
+        selection = menu.selection[]
+        selection === nothing && return previous
+        index = findfirst(==(selection), names)
+        return index === nothing ? previous : index
+    end
+
     function refresh()
-        scenario = scenario_names[findfirst(
-            ==(scenario_menu.selection[]),
-            string.(scenario_names),
-        )]
-        candidate = findfirst(==(battery_menu.selection[]), battery_labels)
-        plan = if strategy_menu === nothing
-            first(plan_names)
-        else
-            plan_names[findfirst(==(strategy_menu.selection[]), string.(plan_names))]
-        end
+        previous = last_choice[]
+        chosen = (
+            _chosen(scenario_menu, string.(scenario_names), previous[1]),
+            _chosen(battery_menu, battery_labels, previous[2]),
+            _chosen(strategy_menu, string.(plan_names), previous[3]),
+        )
+        last_choice[] = chosen
+        scenario = scenario_names[chosen[1]]
+        candidate = chosen[2]
+        plan = plan_names[chosen[3]]
         result = simulation(scenario, candidate, plan)
 
         # Width is in hours, so the window is an exact interval range rather than whole days.
