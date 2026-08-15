@@ -39,6 +39,18 @@ unreadable. See [`plot_blocks`](@ref).
 const PLOT_MAX_POINTS = 1500
 
 """
+    Intervals(range)
+
+A window given as exact interval indices rather than as whole days, for a caller that has already
+worked out where it wants to look — a slider measuring width in hours, say. Wrapping it keeps
+[`interval_range`](@ref) unambiguous: a bare `1:3` means the first three *days*, and there is no way
+to tell that apart from three intervals without saying which you meant.
+"""
+struct Intervals{R<:AbstractUnitRange{<:Integer}}
+    range::R
+end
+
+"""
     interval_range(grid::TimeGrid, days) -> UnitRange{Int}
 
 Interval indices covered by `days`, which may be
@@ -46,6 +58,7 @@ Interval indices covered by `days`, which may be
   - an integer — that day of the horizon, 1-based;
   - an integer range — those days, so `1:3` is the first three days;
   - a `Date` or a range of `Date`s — those calendar days;
+  - an [`Intervals`](@ref) — exact interval indices, for sub-day windows;
   - `:` or `nothing` — the whole horizon.
 
 Throws if the selection falls outside the horizon, rather than silently clipping to nothing.
@@ -69,6 +82,15 @@ function interval_range(grid::TimeGrid, days)
 
     days === nothing && return 1:total
     days === Colon() && return 1:total
+    if days isa Intervals
+        first(days.range) >= 1 && last(days.range) <= total || throw(
+            ArgumentError(
+                "interval selection $(days.range) falls outside the horizon's 1:$total",
+            ),
+        )
+        isempty(days.range) && throw(ArgumentError("interval selection is empty"))
+        return first(days.range):last(days.range)
+    end
     days isa Integer && return range_of(days, days)
     days isa AbstractUnitRange{<:Integer} && return range_of(first(days), last(days))
     if days isa Date

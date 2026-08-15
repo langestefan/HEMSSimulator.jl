@@ -15,6 +15,7 @@ using HEMSSimulator:
     ASSET_COLOURS,
     Bill,
     Contract,
+    Intervals,
     HomeSystem,
     RunOptions,
     Weather,
@@ -30,7 +31,7 @@ using HEMSSimulator:
     state_panels,
     with_assets
 using DataFrames: DataFrame, nrow
-using Dates: DateTime
+using Dates: Date, DateTime, Day
 using Makie
 using Makie: Axis, Figure, Label, Legend, Point2f, RGBAf, Theme
 
@@ -430,10 +431,26 @@ function HEMSSimulator.dashboard(
     rowsize!(left, 1, Relative(0.34))
     linkxaxes!(dispatch_axis, state_axes...)
 
+    # The sliders read in the units a person thinks in: a date to start from, and a width in hours.
+    # Their *values* stay an integer day index and an integer hour count; only the labels change.
+    per_day = intervals_per_day(grid)
+    interval = hours(grid)
+    start_date = Date(grid.start)
+    widths = sort(unique(vcat([3, 6, 12], collect(24:24:(24*min(28, days))))))
     sliders = SliderGrid(
         left[panel_count+2, 1],
-        (label = "day", range = 1:days, startvalue = 1),
-        (label = "width", range = 1:min(28, days), startvalue = min(width, days)),
+        (
+            label = "from",
+            range = 1:days,
+            startvalue = 1,
+            format = day -> string(start_date + Day(day - 1)),
+        ),
+        (
+            label = "width",
+            range = widths,
+            startvalue = widths[argmin(abs.(widths .- 24 * width))],
+            format = span -> span < 24 ? "$(span) h" : "$(span) h  ($(span ÷ 24) d)",
+        ),
     )
 
     scenario_menu = Menu(
@@ -488,10 +505,14 @@ function HEMSSimulator.dashboard(
         end
         result = simulation(scenario, candidate, plan)
 
+        # Width is in hours, so the window is an exact interval range rather than whole days.
         first_day = sliders.sliders[1].value[]
-        span = sliders.sliders[2].value[]
-        window = first_day:min(first_day+span-1, days)
-        rows = interval_range(result.grid, window)
+        span_hours = sliders.sliders[2].value[]
+        origin = (first_day - 1) * per_day + 1
+        rows = interval_range(
+            result.grid,
+            Intervals(origin:min(origin+round(Int, span_hours/interval)-1, result.grid.n)),
+        )
         blocks = plot_blocks(length(rows), max_points)
         x = _axis_hours(result, rows, blocks)
         keep = [l for (l, t) in zip(labels, toggles) if t.active[]]
@@ -500,7 +521,7 @@ function HEMSSimulator.dashboard(
         HEMSSimulator.dispatch_plot!(
             dispatch_axis,
             result;
-            days = window,
+            days = Intervals(rows),
             max_points,
             include = keep,
         )
@@ -528,7 +549,8 @@ function HEMSSimulator.dashboard(
         last(stacked).xticklabelsvisible = true
         last(stacked).xlabelvisible = true
         readout.text[] =
-            "days $(first(window))–$(last(window))\n\n" * _window_kpis(result, rows)
+            "$(timestamp(result.grid, first(rows))) → $(timestamp(result.grid, last(rows)))\n\n" *
+            _window_kpis(result, rows)
         return nothing
     end
 

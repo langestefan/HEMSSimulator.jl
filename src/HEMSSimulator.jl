@@ -159,7 +159,7 @@ export sweep_plot, sweep_plot!, bill_plot, bill_plot!
 export dashboard
 export hems_theme, StatePanel, state_panels, flow_series, bill_components
 export flow_table, state_table
-export ASSET_COLOURS, interval_range
+export ASSET_COLOURS, interval_range, Intervals
 
 # Synthetic inputs
 export synthetic_weather, synthetic_load, synthetic_prices, clearsky_ghi
