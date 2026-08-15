@@ -54,7 +54,35 @@ function _window(result::SimulationResult, days, max_points::Integer)
 end
 
 _note(blocks::Integer, dt::Real) =
-    blocks == 1 ? "" : "  (averaged over $(round(blocks * dt; digits = 2)) h blocks)"
+    blocks == 1 ? "" : "averaged over $(round(blocks * dt; digits = 2)) h blocks"
+
+# Minor ticks between the majors on both axes. Four on x puts a mark every three hours under a
+# twelve-hour label, which is the resolution a reader actually wants to interpolate against; two on y
+# halves the gridline spacing without turning the panel into graph paper.
+function _minor_ticks!(axis::Axis; x::Bool = true)
+    major, minor = RGBAf(0, 0, 0, 0.10), RGBAf(0, 0, 0, 0.04)
+    if x
+        axis.xminorticksvisible = true
+        axis.xminorgridvisible = true
+        axis.xminorticks = IntervalsBetween(4)
+        axis.xgridcolor = major
+        axis.xminorgridcolor = minor
+    end
+    axis.yminorticksvisible = true
+    axis.yminorgridvisible = true
+    axis.yminorticks = IntervalsBetween(2)
+    axis.ygridcolor = major
+    axis.yminorgridcolor = minor
+    return axis
+end
+
+# A time axis is drawn in hours since the window opened but labelled with dates, so a reader can find
+# an evening peak without counting. `time_ticks` does the arithmetic; this only hands it to Makie.
+function _time_axis!(axis::Axis, result::SimulationResult, rows)
+    dt = hours(result.grid)
+    axis.xticks = time_ticks(timestamp(result.grid, first(rows)), length(rows) * dt)
+    return _minor_ticks!(axis)
+end
 
 # ---------------------------------------------------------------------------------------------
 # Dispatch
@@ -101,8 +129,8 @@ function HEMSSimulator.dispatch_plot!(
     handles = vcat(stack!(keep(series.sources), 1), stack!(keep(series.sinks), -1))
     hlines!(axis, [0.0]; color = :black, linewidth = 0.8)
 
-    dt = hours(result.grid)
-    axis.xlabel = "hours from the start of the window" * _note(blocks, dt)
+    _time_axis!(axis, result, rows)
+    axis.xlabel = _note(blocks, hours(result.grid))
     axis.ylabel = "kW  (sources up, sinks down)"
     return handles
 end
@@ -205,12 +233,13 @@ function HEMSSimulator.state_plot(
             marker = :hline,
             markersize = 14,
         )
+        _time_axis!(axis, result, rows)
         row == length(panels) ||
             (axis.xticklabelsvisible = false; axis.xlabelvisible = false)
         push!(axes, axis)
     end
     linkxaxes!(axes...)
-    axes[end].xlabel = "hours from the start of the window" * _note(blocks, dt)
+    axes[end].xlabel = _note(blocks, dt)
     axes[1].title = "State"
     return figure
 end
@@ -230,10 +259,16 @@ function HEMSSimulator.sweep_plot!(axis::Axis, table::DataFrame; by::Symbol = :n
     end
 
     handles = Pair{String,Any}[]
-    for (label, block) in groups
+    for (index, (label, block)) in enumerate(groups)
         x = block.capacity_kwh
         y = block[!, by]
-        line = lines!(axis, x, y; linewidth = 1.8)
+        line = lines!(
+            axis,
+            x,
+            y;
+            linewidth = 1.8,
+            color = first(_colour(series_colour(index))),
+        )
         index = argmax(y)
         edge = index == 1 || index == nrow(block)
         scatter!(
@@ -248,6 +283,7 @@ function HEMSSimulator.sweep_plot!(axis::Axis, table::DataFrame; by::Symbol = :n
         isempty(label) || push!(handles, label => line)
     end
     hlines!(axis, [0.0]; color = (:black, 0.3), linewidth = 0.8)
+    _minor_ticks!(axis)
     axis.xlabel = "battery capacity, kWh"
     axis.ylabel = string(by)
     return handles
@@ -321,6 +357,9 @@ function HEMSSimulator.bill_plot!(
     end
     hlines!(axis, [0.0]; color = :black, linewidth = 0.8)
 
+    # Categorical x, so minor ticks belong on the money axis only — there is nothing to interpolate
+    # between "energy tax" and "transport".
+    _minor_ticks!(axis; x = false)
     axis.xticks = (1:(length(labels)+1), vcat(labels, "total"))
     axis.xticklabelrotation = π / 4
     axis.ylabel = "€ over the settled period"
@@ -543,6 +582,7 @@ function HEMSSimulator.dashboard(
         stacked = vcat(dispatch_axis, state_axes)
         for axis in stacked
             autolimits!(axis)
+            _time_axis!(axis, result, rows)
             axis.xticklabelsvisible = false
             axis.xlabelvisible = false
         end
@@ -574,23 +614,20 @@ end
 function HEMSSimulator.hems_theme()
     return Theme(;
         fontsize = 12,
-        palette = (
-            color = [
-                first(_colour(hex)) for hex in (
-                    ASSET_COLOURS.battery,
-                    ASSET_COLOURS.heatpump,
-                    ASSET_COLOURS.ev,
-                    ASSET_COLOURS.dhw,
-                    ASSET_COLOURS.pv,
-                    ASSET_COLOURS.export_,
-                )
-            ],
-        ),
+        palette = (color = [first(_colour(hex)) for hex in SERIES_COLOURS],),
         Axis = (;
             rightspinevisible = false,
             topspinevisible = false,
-            xgridcolor = RGBAf(0, 0, 0, 0.06),
-            ygridcolor = RGBAf(0, 0, 0, 0.06),
+            xgridcolor = RGBAf(0, 0, 0, 0.10),
+            ygridcolor = RGBAf(0, 0, 0, 0.10),
+            xminorticksvisible = true,
+            yminorticksvisible = true,
+            xminorgridvisible = true,
+            yminorgridvisible = true,
+            xminorgridcolor = RGBAf(0, 0, 0, 0.04),
+            yminorgridcolor = RGBAf(0, 0, 0, 0.04),
+            xminorticks = IntervalsBetween(4),
+            yminorticks = IntervalsBetween(2),
         ),
         Legend = (; framevisible = false),
     )

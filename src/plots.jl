@@ -14,20 +14,57 @@
 Colour per flow, as hex strings. Shared by every plot so an asset is the same colour wherever it
 appears — an EV in a dispatch plot and in a state plot are visibly the same thing.
 
+These are the eight hues of the **Okabe–Ito** palette plus two greys. That palette was constructed so
+that every pair stays distinguishable under protanopia, deuteranopia and tritanopia, which matters
+here more than it would elsewhere: the two flows a reader most needs to tell apart are `import` and
+`export`, and the obvious choice for those is red against green — precisely the pair red–green colour
+blindness collapses. Okabe–Ito's vermillion and blue differ in hue *and* in luminance, so they survive
+both the simulation and a greyscale print.
+
+The assignment within the palette is not arbitrary either. `pv` and `import` are the two bands that
+always stack against each other on the source side, so they take the pair that is furthest apart —
+yellow against vermillion. The obvious "PV is orange, import is red" reading fails: Okabe–Ito's orange
+and vermillion are neighbours, and they merge into one band under deuteranopia. Orange went to `dhw`,
+which is a sink and never touches either.
+
+Do not substitute a "nicer" hex here without checking it the same way; the palette is a set, not a
+list of independently chosen colours.
+
 Stored as strings rather than `Colorant`s because this file is loaded without Makie.
 """
 const ASSET_COLOURS = (
-    pv = "#F2B705",
-    load = "#2E2E2E",
-    var"import" = "#C1436D",
-    export_ = "#4C9F70",
-    battery = "#3B7EA1",
-    ev = "#7B5EA7",
-    heatpump = "#D96C3B",
-    dhw = "#3FA7A0",
-    curtail = "#9E9E9E",
+    pv = "#F0E442",          # yellow
+    load = "#4D4D4D",        # dark grey — a backdrop, not one of the eight
+    var"import" = "#D55E00",  # vermillion
+    export_ = "#0072B2",     # blue
+    battery = "#009E73",     # bluish green
+    ev = "#CC79A7",          # reddish purple
+    heatpump = "#56B4E9",    # sky blue
+    dhw = "#E69F00",         # orange
+    curtail = "#999999",     # light grey
     neutral = "#767676",
 )
+
+"""
+    SERIES_COLOURS
+
+Colour cycle for plots with one line per *group* rather than per flow — a scenario, a strategy, a
+tariff. [`ASSET_COLOURS`](@ref) does not apply there: nothing about a strategy makes it a battery.
+
+Same Okabe–Ito set, ordered so the first few are as far apart as the palette allows. Relying on the
+plotting backend's default cycle instead is what puts the third and fourth series on a red and a
+green, which is the pair this table exists to avoid.
+"""
+const SERIES_COLOURS =
+    ("#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#4D4D4D")
+
+"""
+    series_colour(index) -> String
+
+The `index`-th entry of [`SERIES_COLOURS`](@ref), wrapping round. 1-based, so it takes a group's
+position in a list directly.
+"""
+series_colour(index::Integer) = SERIES_COLOURS[mod1(index, length(SERIES_COLOURS))]
 
 """
     PLOT_MAX_POINTS
@@ -107,6 +144,81 @@ function interval_range(grid::TimeGrid, days)
             "got $(typeof(days))",
         ),
     )
+end
+
+"""
+    TIME_TICK_FORMAT
+
+How a time axis labels a tick: month, day, hour, minute. No year — a plotted window is days long and
+the year belongs in the title, if anywhere.
+"""
+const TIME_TICK_FORMAT = dateformat"mm-dd HH:MM"
+
+# Steps a time axis is allowed to fall back to, in hours, coarsest last. Every entry divides a day
+# (or is a whole number of days) so that ticks stay aligned to midnight whichever one is chosen.
+const _TICK_STEPS =
+    (0.25, 0.5, 1.0, 2.0, 3.0, 6.0, 12.0, 24.0, 48.0, 72.0, 168.0, 336.0, 720.0)
+
+"""
+    time_ticks(start::DateTime, span_hours; step_hours = 12) -> (positions, labels)
+
+Tick positions and labels for a time axis drawn in *hours since `start`*, which is what the
+time-series plots use as their x coordinate.
+
+Ticks are aligned to midnight rather than to `start`: with the default 12-hour step they land on
+00:00 and 12:00 whatever time the window opens, so the same hour of the day sits at the same place in
+every figure and a day boundary is always a labelled tick. Labels are
+[`TIME_TICK_FORMAT`](@ref).
+
+`step_hours` is honoured whenever it produces a readable axis — between 2 and 12 ticks. Outside that
+it is a request rather than an instruction, and the nearest step that gets close to six ticks is used
+instead, because a 3-hour dashboard window with a 12-hour step would otherwise carry no labels at all
+and a 28-day one would carry fifty-six.
+
+# Examples
+
+```jldoctest
+julia> positions, labels = time_ticks(DateTime(2025, 7, 10, 6, 0), 72);
+
+julia> positions
+6-element Vector{Float64}:
+  6.0
+ 18.0
+ 30.0
+ 42.0
+ 54.0
+ 66.0
+
+julia> labels[1:2]
+2-element Vector{String}:
+ "07-10 12:00"
+ "07-11 00:00"
+```
+"""
+function time_ticks(start::DateTime, span_hours::Real; step_hours::Real = 12)
+    span_hours >= 0 ||
+        throw(ArgumentError("span_hours must be non-negative; got $span_hours"))
+    step_hours > 0 || throw(ArgumentError("step_hours must be positive; got $step_hours"))
+
+    ticks(step) = floor(Int, (span_hours - _first_tick(start, step)) / step) + 1
+    step =
+        2 <= ticks(step_hours) <= 12 ? float(step_hours) :
+        argmin(candidate -> abs(ticks(candidate) - 6), _TICK_STEPS)
+
+    positions = collect(_first_tick(start, step):step:span_hours)
+    labels = [
+        Dates.format(start + Millisecond(round(Int, h * 3_600_000)), TIME_TICK_FORMAT)
+        for h in positions
+    ]
+    return positions, labels
+end
+
+# Hours from `start` to the first instant at or after it that is a whole multiple of `step` since
+# midnight. Steps longer than a day align to midnight itself.
+function _first_tick(start::DateTime, step::Real)
+    since_midnight = (start - DateTime(Date(start))) / Millisecond(1) / 3_600_000
+    step >= 24 && return since_midnight == 0 ? 0.0 : 24 - since_midnight
+    return mod(-since_midnight, step)
 end
 
 """
@@ -293,7 +405,7 @@ function flow_series(result::SimulationResult)
         end
     end
     # The base load is a sink like any other, and always present.
-    push!(sinks, "load" => (collect(Float64, frame.load_kw), ASSET_COLOURS.load))
+    push!(sinks, "base load" => (collect(Float64, frame.load_kw), ASSET_COLOURS.load))
     return (; sources, sinks)
 end
 

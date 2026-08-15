@@ -9,7 +9,7 @@
 using CSV
 using DataFrames
 using GLMakie
-using HEMSSimulator: ASSET_COLOURS
+using HEMSSimulator: ASSET_COLOURS, series_colour, time_ticks
 
 # Never open a window: this script only writes files, and a stray window kills it on a headless or
 # remote session.
@@ -26,7 +26,7 @@ colour(series) = get(
         "import" => ASSET_COLOURS.var"import",
         "export" => ASSET_COLOURS.export_,
         "curtailed" => ASSET_COLOURS.curtail,
-        "load" => ASSET_COLOURS.load,
+        "base load" => ASSET_COLOURS.load,
         "battery charge" => ASSET_COLOURS.battery,
         "battery discharge" => ASSET_COLOURS.battery,
         "ev charge" => ASSET_COLOURS.ev,
@@ -38,6 +38,34 @@ colour(series) = get(
     ASSET_COLOURS.neutral,
 )
 
+# The same axis furniture the package's own plots use, applied here by hand because these figures are
+# rebuilt from CSVs rather than from a `SimulationResult`.
+function minor_ticks!(axis; x = true)
+    major, minor = RGBAf(0, 0, 0, 0.10), RGBAf(0, 0, 0, 0.04)
+    if x
+        axis.xminorticksvisible = true
+        axis.xminorgridvisible = true
+        axis.xminorticks = IntervalsBetween(4)
+        axis.xgridcolor = major
+        axis.xminorgridcolor = minor
+    end
+    axis.yminorticksvisible = true
+    axis.yminorgridvisible = true
+    axis.yminorticks = IntervalsBetween(2)
+    axis.ygridcolor = major
+    axis.yminorgridcolor = minor
+    return axis
+end
+
+# The long tables carry both the timestamp and the hour-from-window-start each row was drawn at, so
+# the date labels come straight out of the data rather than out of the config.
+function time_axis!(axis, block)
+    marks = sort(unique(block.hour))
+    step = length(marks) > 1 ? marks[2] - marks[1] : 1.0
+    axis.xticks = time_ticks(minimum(block.timestamp), maximum(marks) + step)
+    return minor_ticks!(axis)
+end
+
 # ---------------------------------------------------------------------------------------------
 # KPI curves against battery capacity, one line per strategy.
 
@@ -46,18 +74,21 @@ comparison = table("comparison")
 function kpi_figure(column, ylabel, title)
     figure = Figure(size = (760, 420))
     axis = Axis(figure[1, 1]; title, xlabel = "battery capacity, kWh", ylabel)
-    for name in unique(comparison.strategy)
+    for (index, name) in enumerate(unique(comparison.strategy))
         block = comparison[comparison.strategy .== name, :]
+        shade = series_colour(index)
         lines!(
             axis,
             block.capacity_kwh,
             block[!, column];
             label = string(name),
             linewidth = 2,
+            color = shade,
         )
-        scatter!(axis, block.capacity_kwh, block[!, column]; markersize = 9)
+        scatter!(axis, block.capacity_kwh, block[!, column]; markersize = 9, color = shade)
     end
     column === :npv && hlines!(axis, [0.0]; color = (:black, 0.3), linewidth = 0.8)
+    minor_ticks!(axis)
     axislegend(axis; framevisible = false)
     return figure
 end
@@ -81,16 +112,24 @@ let figure = Figure(size = (620, 460))
         xlabel = "annual savings, EUR",
         ylabel = "energy taken from the grid, kWh/year",
     )
-    for name in unique(comparison.strategy)
+    for (index, name) in enumerate(unique(comparison.strategy))
         block = comparison[comparison.strategy .== name, :]
+        shade = series_colour(index)
         lines!(
             axis,
             block.annual_savings,
             block.imported_kwh;
             label = string(name),
             linewidth = 2,
+            color = shade,
         )
-        scatter!(axis, block.annual_savings, block.imported_kwh; markersize = 9)
+        scatter!(
+            axis,
+            block.annual_savings,
+            block.imported_kwh;
+            markersize = 9,
+            color = shade,
+        )
         for row in eachrow(block)
             text!(
                 axis,
@@ -103,6 +142,7 @@ let figure = Figure(size = (620, 460))
             )
         end
     end
+    minor_ticks!(axis)
     axislegend(axis; framevisible = false)
     save_figure(FIGS, "trade-off", figure)
 end
@@ -112,12 +152,8 @@ end
 
 function dispatch_figure(flows, title)
     figure = Figure(size = (1000, 420))
-    axis = Axis(
-        figure[1, 1];
-        title,
-        xlabel = "hours from the start of the window",
-        ylabel = "kW  (sources up, sinks down)",
-    )
+    axis = Axis(figure[1, 1]; title, ylabel = "kW  (sources up, sinks down)")
+    time_axis!(axis, flows)
     handles, labels = Any[], String[]
     for (direction, sign) in ((:source, 1), (:sink, -1))
         running = nothing
@@ -182,11 +218,11 @@ function state_figure(states, title)
             marker = :hline,
             markersize = 14,
         )
+        time_axis!(axis, block)
         row == length(panels) || (axis.xticklabelsvisible = false)
         push!(axes, axis)
     end
     linkxaxes!(axes...)
-    axes[end].xlabel = "hours from the start of the window"
     axes[1].title = title
     return figure
 end

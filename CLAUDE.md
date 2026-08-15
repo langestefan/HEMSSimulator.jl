@@ -291,8 +291,19 @@ be plain Julia lives in the package: `ASSET_COLOURS`, `interval_range` / `plot_b
 `block_mean`, and `state_panels`. So the logic most likely to be wrong loads without a plotting
 stack.
 
-Two design points worth not undoing:
+Four design points worth not undoing:
 
+- **`ASSET_COLOURS` is the Okabe–Ito palette, and the assignment within it is not free.** The set is
+  chosen so every pair survives protanopia, deuteranopia and tritanopia; picking a "nicer" hex for one
+  entry breaks that property for the whole table. The assignment matters too: `pv` and `import` always
+  stack against each other on the source side, so they take the furthest-apart pair (yellow against
+  vermillion). The intuitive "PV orange, import red" fails — Okabe–Ito's orange and vermillion are
+  neighbours and merge under deuteranopia. Orange went to `dhw`, a sink that never touches either.
+- **Time axes are drawn in hours since the window opened but ticked on the clock.** `time_ticks`
+  aligns to midnight rather than to the window's start, so the same hour of the day sits at the same
+  place in every figure and a day boundary is always a labelled tick. The 12-hour default is honoured
+  only while it yields 2–12 ticks; a 3-hour dashboard window would otherwise carry no label at all and
+  a 28-day one fifty-six, so outside that range it falls back to the step nearest six ticks.
 - **`flow_series` reads `consumption_columns` / `production_columns`** — the same declarations
   `balance_residual` uses. A new asset therefore appears in the dispatch plot with no change here,
   and the picture cannot disagree with the accounting. A legend suffix is taken from the *resolved

@@ -34,7 +34,17 @@ module HEMSSimulator
 
 using CSV: CSV
 using DataFrames: DataFrame, DataFrameRow, insertcols!, nrow
-using Dates: Dates, Date, DateTime, Hour, Millisecond, Minute, Period, dayofweek, dayofyear
+using Dates:
+    Dates,
+    Date,
+    DateTime,
+    Hour,
+    Millisecond,
+    Minute,
+    Period,
+    @dateformat_str,
+    dayofweek,
+    dayofyear
 using ENTSOE: ENTSOE
 using HTTP: HTTP
 using HiGHS: HiGHS
@@ -159,7 +169,8 @@ export sweep_plot, sweep_plot!, bill_plot, bill_plot!
 export dashboard
 export hems_theme, StatePanel, state_panels, flow_series, bill_components
 export flow_table, state_table
-export ASSET_COLOURS, interval_range, Intervals
+export ASSET_COLOURS,
+    SERIES_COLOURS, series_colour, interval_range, Intervals, time_ticks, TIME_TICK_FORMAT
 
 # Synthetic inputs
 export synthetic_weather, synthetic_load, synthetic_prices, baseload, clearsky_ghi

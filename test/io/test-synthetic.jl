@@ -35,19 +35,25 @@ end
     @test 1.5 <= maximum(profile) / minimum(profile) <= 2.5
 end
 
-@testitem "baseload is defined off midnight, on any step that divides a day" tags = [:unit, :fast] begin
+@testitem "baseload is defined off midnight, on any step that divides a day" tags =
+    [:unit, :fast] begin
     using Dates: DateTime, Minute
     using Statistics: mean
 
     # The normaliser comes from the grid's start and step, not from its length, so none of these
     # shift the mean.
-    @test mean(baseload(TimeGrid(DateTime(2025, 3, 1), Minute(60), 24 * 5))) ≈ 0.3 rtol = 0.02
-    @test mean(baseload(TimeGrid(DateTime(2025, 3, 1), Minute(5), 288 * 3))) ≈ 0.3 rtol = 0.01
+    @test mean(baseload(TimeGrid(DateTime(2025, 3, 1), Minute(60), 24 * 5))) ≈ 0.3 rtol =
+        0.02
+    @test mean(baseload(TimeGrid(DateTime(2025, 3, 1), Minute(5), 288 * 3))) ≈ 0.3 rtol =
+        0.01
     @test mean(baseload(TimeGrid(DateTime(2025, 3, 1, 13, 30), 96 * 3))) ≈ 0.3 rtol = 0.02
 
     # A step that does not divide a day leaves "the mean over a day" undefined, so it is refused
     # rather than silently normalised against a partial cycle.
     @test_throws ArgumentError baseload(TimeGrid(DateTime(2025, 3, 1), Minute(7), 100))
-    @test_throws ArgumentError baseload(TimeGrid(DateTime(2025, 3, 1), 96); average_kw = -0.1)
+    @test_throws ArgumentError baseload(
+        TimeGrid(DateTime(2025, 3, 1), 96);
+        average_kw = -0.1,
+    )
     @test_throws ArgumentError baseload(TimeGrid(DateTime(2025, 3, 1), 96); jitter = 1.0)
 end
