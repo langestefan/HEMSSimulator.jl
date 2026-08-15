@@ -126,6 +126,66 @@ Whether the asset can export to the home (vehicle-to-grid / vehicle-to-home).
 supports_v2g(::AbstractAsset) = false
 
 """
+    AbstractStrategy
+
+What the controller is trying to achieve. The dispatch model is the same either way — same
+variables, same constraints, same assets — and only the objective changes, which is the point: the
+two strategies are comparable because nothing else differs.
+
+  - [`EconomicStrategy`](@ref) minimises what the household pays.
+  - [`GreenStrategy`](@ref) minimises what it takes from the grid.
+"""
+abstract type AbstractStrategy end
+
+"""
+    EconomicStrategy()
+
+Minimise cost at the dispatch price: `Σ Δ·(buy·import − sell·export)`, plus whatever the assets
+add. The default, and what every result in this package assumed before strategies existed.
+"""
+struct EconomicStrategy <: AbstractStrategy end
+
+"""
+    GreenStrategy(; cost_weight = 1.0e-3)
+
+Minimise energy taken from the grid, `Σ Δ·import`, with the cost objective kept on at
+`cost_weight` as a tie-break.
+
+**Self-consumption falls out rather than being imposed.** Charging the battery from the grid *is* an
+import, and a round trip loses energy, so it can never avoid as much later import as it costs now.
+An import-minimising optimizer therefore never grid-charges — it only ever stores surplus PV. There
+is no rule forbidding it because none is needed.
+
+The tie-break matters. Minimising imports leaves many equally good schedules, and with nothing to
+separate them the solver returns an arbitrary one; the cost term picks the cheapest of them. It is a
+scalarisation, not a lexicographic solve: `cost_weight` must stay small enough that no amount of
+money outweighs a kWh of import. At the default, a kWh of import costs the objective 1 while the
+dearest kWh ever seen costs it about 0.0005.
+
+One consequence worth expecting: at that weight `Battery.degradation_cost` is also scaled into
+insignificance, so a green household may cycle its battery harder than an economic one for no
+return. That is arguably right for a strategy that does not care about money, but it shows up in
+`cycles_per_year`.
+"""
+Base.@kwdef struct GreenStrategy <: AbstractStrategy
+    cost_weight::Float64 = 1.0e-3
+end
+
+"""
+    objective_weights(strategy, ctx) -> (; import_kwh, cost)
+
+How much the window objective weights imported energy and money. `dispatch.jl` assembles
+
+    Σ Δ·(import_kwh·import[k])  +  cost·(the price and asset terms)
+
+so a strategy is two numbers, and adding one means adding a method here rather than a branch in the
+model builder.
+"""
+objective_weights(::EconomicStrategy, _) = (; import_kwh = 0.0, cost = 1.0)
+objective_weights(strategy::GreenStrategy, _) =
+    (; import_kwh = 1.0, cost = strategy.cost_weight)
+
+"""
     RunOptions(; kwargs...)
 
 How a simulation is run: the rolling-horizon geometry, the solver, and the modelling switches.
@@ -147,9 +207,10 @@ How a simulation is run: the rolling-horizon geometry, the solver, and the model
     objective. Keeps the LP non-degenerate under net metering, where the two are otherwise equal.
   - `check_degeneracy::Bool`: warn if a solution simultaneously imports and exports, or
     simultaneously charges and discharges.
+  - `strategy::AbstractStrategy`: what the controller optimizes for. See [`AbstractStrategy`](@ref).
   - `silent::Bool`: suppress solver output.
 """
-struct RunOptions{O}
+struct RunOptions{O,S<:AbstractStrategy}
     window_hours::Float64
     step_hours::Float64
     optimizer::O
@@ -157,6 +218,7 @@ struct RunOptions{O}
     terminal_value::Bool
     price_epsilon::Float64
     check_degeneracy::Bool
+    strategy::S
     silent::Bool
 end
 
@@ -171,6 +233,7 @@ RunOptions(;
     terminal_value::Bool = true,
     price_epsilon::Real = 1.0e-4,
     check_degeneracy::Bool = true,
+    strategy::AbstractStrategy = EconomicStrategy(),
     silent::Bool = true,
 ) = RunOptions(
     float(window_hours),
@@ -180,6 +243,7 @@ RunOptions(;
     terminal_value,
     float(price_epsilon),
     check_degeneracy,
+    strategy,
     silent,
 )
 

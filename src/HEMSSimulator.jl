@@ -123,6 +123,7 @@ export thermostat_profile, heat_demand_kwh, discomfort_kh
 export WaterTank, dhw_draw, dhw_energy_kwh, dhw_shortfall_kwh, dhw_unserved_kwh
 export tank_capacity_kwh, tank_reserve_kwh, WATER_KWH_PER_LITRE_K
 export HomeSystem, RunOptions, SimulationInputs
+export AbstractStrategy, EconomicStrategy, GreenStrategy, objective_weights
 export prepare, with_assets, supports_binary, supports_v2g, initial_state
 export add_variables!,
     add_constraints!, power_terms, cost_terms, carry_state, result_columns
@@ -157,6 +158,7 @@ export dispatch_plot, dispatch_plot!, state_plot, state_plot!
 export sweep_plot, sweep_plot!, bill_plot, bill_plot!
 export dashboard
 export hems_theme, StatePanel, state_panels, flow_series, bill_components
+export flow_table, state_table
 export ASSET_COLOURS, interval_range
 
 # Synthetic inputs

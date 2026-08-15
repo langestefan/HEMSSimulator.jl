@@ -13,8 +13,9 @@ import − export + pv − curtailment + Σ asset production == load + Σ asset 
 [`AbstractAsset`](@ref) contract. `states` is a vector parallel to `system.assets` holding the state
 each asset carries in from the previous window.
 
-The objective is the window's energy cost at the dispatch price signal, plus whatever the assets add
-(throughput cost, terminal storage value).
+The objective is set by `options.strategy`: a weighted sum of imported energy and of money, the
+latter covering the dispatch price signal plus whatever the assets add (throughput cost, terminal
+storage value). See [`AbstractStrategy`](@ref).
 """
 function build_window(system::HomeSystem, ctx::DispatchContext, states)
     n = ctx.grid.n
@@ -52,13 +53,21 @@ function build_window(system::HomeSystem, ctx::DispatchContext, states)
         imported[k] - exported[k] + production_expr[k] - curtail[k] == consumption[k]
     )
 
+    # The strategy is two weights, not a branch: one on imported energy, one on money. See
+    # `AbstractStrategy`. Economic is (0, 1) and reproduces the objective exactly as it was.
+    weights = objective_weights(ctx.options.strategy, ctx)
     objective = AffExpr(0.0)
     for k = 1:n
-        add_to_expression!(objective, dt * inputs.price_buy[k], imported[k])
-        add_to_expression!(objective, -dt * inputs.price_sell[k], exported[k])
+        add_to_expression!(objective, weights.import_kwh * dt, imported[k])
+        add_to_expression!(objective, weights.cost * dt * inputs.price_buy[k], imported[k])
+        add_to_expression!(
+            objective,
+            -weights.cost * dt * inputs.price_sell[k],
+            exported[k],
+        )
     end
     for (asset, vars) in zip(system.assets, asset_vars)
-        add_to_expression!(objective, cost_terms(model, asset, ctx, vars))
+        add_to_expression!(objective, weights.cost, cost_terms(model, asset, ctx, vars))
     end
     @objective(model, Min, objective)
 

@@ -295,6 +295,114 @@ function _flow_colour(column::Symbol)
 end
 
 """
+    flow_table(result::SimulationResult; days = :) -> DataFrame
+
+The data behind a [`dispatch_plot`](@ref), in long form: one row per interval per series.
+
+| column | |
+|:--|:--|
+| `timestamp` | interval beginning, UTC |
+| `hour` | hours from the start of the window, which is what a plot's x-axis wants |
+| `series` | `"PV"`, `"import"`, `"battery discharge"`, … as the legend would say |
+| `direction` | `:source` or `:sink` |
+| `kw` | always positive; `direction` carries the sign |
+
+This exists so that simulating and plotting can be separate steps. A study writes this to CSV once,
+and a figure script reads it back and redraws as often as the figure needs changing — without
+re-solving a year. It is also the honest artifact: the numbers behind a picture, in a form anyone
+can check with a spreadsheet.
+
+Series come from [`flow_series`](@ref), so they agree with the meter balance by construction.
+"""
+function flow_table(result::SimulationResult; days = Colon())
+    rows = interval_range(result.grid, days)
+    dt = hours(result.grid)
+    stamps = timestamps(result.grid)
+    series = flow_series(result)
+    table = DataFrame(
+        timestamp = DateTime[],
+        hour = Float64[],
+        series = String[],
+        direction = Symbol[],
+        kw = Float64[],
+    )
+    for (direction, entries) in ((:source, series.sources), (:sink, series.sinks))
+        for (label, (values, _)) in entries
+            all(iszero, @view values[rows]) && continue
+            for k in rows
+                push!(
+                    table,
+                    (stamps[k], (k - first(rows)) * dt, label, direction, values[k]),
+                )
+            end
+        end
+    end
+    return table
+end
+
+"""
+    state_table(result::SimulationResult; days = :) -> DataFrame
+
+The data behind a [`state_plot`](@ref), in long form: one row per interval per panel, carrying the
+limits alongside the trajectory so a figure script needs nothing else.
+
+| column | |
+|:--|:--|
+| `timestamp`, `hour` | as [`flow_table`](@ref) |
+| `panel` | `"battery, kWh"`, `"indoor, °C"`, … |
+| `value` | the trajectory |
+| `lower`, `upper` | constant bounds, `missing` when the panel has none |
+| `band_lower`, `band_upper` | per-interval bounds — the comfort band — else `missing` |
+| `target` | a point constraint at this interval, else `missing` |
+| `away` | `true` where the asset is absent, for the EV's shading |
+
+Same purpose as `flow_table`: it lets the plotting step be re-run without the simulation step.
+"""
+function state_table(result::SimulationResult; days = Colon())
+    rows = interval_range(result.grid, days)
+    dt = hours(result.grid)
+    stamps = timestamps(result.grid)
+    panels = StatePanel[]
+    for (index, asset) in enumerate(result.system.assets)
+        append!(panels, state_panels(asset, result, index))
+    end
+
+    table = DataFrame(
+        timestamp = DateTime[],
+        hour = Float64[],
+        panel = String[],
+        value = Float64[],
+        lower = Union{Missing,Float64}[],
+        upper = Union{Missing,Float64}[],
+        band_lower = Union{Missing,Float64}[],
+        band_upper = Union{Missing,Float64}[],
+        target = Union{Missing,Float64}[],
+        away = Bool[],
+    )
+    for panel in panels
+        targets = Dict(panel.markers)
+        for k in rows
+            push!(
+                table,
+                (
+                    stamps[k],
+                    (k - first(rows)) * dt,
+                    panel.label,
+                    panel.values[k],
+                    panel.lower === nothing ? missing : panel.lower,
+                    panel.upper === nothing ? missing : panel.upper,
+                    panel.band === nothing ? missing : panel.band[1][k],
+                    panel.band === nothing ? missing : panel.band[2][k],
+                    get(targets, k, missing),
+                    panel.shade === nothing ? false : panel.shade[k],
+                ),
+            )
+        end
+    end
+    return table
+end
+
+"""
     dispatch_plot(result::SimulationResult; days = 1:3, max_points = PLOT_MAX_POINTS)
     dispatch_plot!(axis, result; kwargs...)
 
@@ -419,8 +527,8 @@ backend the figure still builds, but nothing responds.
 # Controls
 
   - **day** and **width** sliders move the window over the horizon. Free — no resimulation.
-  - **scenario** and **battery** menus. Each combination is simulated once, on first selection, and
-    cached; a month is seconds, a year a few.
+  - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Each
+    combination is simulated once, on first selection, and cached; a month is seconds, a year a few.
   - **toggles** filter the dispatch stack. State panels always show every asset.
   - a **KPI block** recomputed for the visible window: energy in and out, self-consumption, and what
     that window cost at the dispatch price.
@@ -430,6 +538,9 @@ backend the figure still builds, but nothing responds.
   - `contracts`: a [`Contract`](@ref), or the `NamedTuple` from [`scenarios`](@ref).
   - `candidates`: the assets to offer in the battery menu. Each is *added* to `system`'s own assets,
     exactly as [`sweep`](@ref) does, so a home that already has a car keeps it in every view.
+  - `strategies`: a `NamedTuple` of [`AbstractStrategy`](@ref) to offer, or `nothing` to use only
+    the one already in `options`. Strategy lives in [`RunOptions`](@ref) rather than in the
+    contract, so it needs its own menu to be comparable side by side.
 
 The drawing is the same `dispatch_plot!` and `state_plot!` the static figures use, redrawn on
 change rather than rebuilt around observables — one drawing path, two front ends, so the

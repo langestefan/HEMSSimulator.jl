@@ -78,6 +78,11 @@ and this project adheres to [Semantic Versioning].
   battery menus that simulate on demand and cache, toggles over the dispatch stack, and a KPI
   readout for the visible window. Needs GLMakie.
 
+- `EconomicStrategy` and `GreenStrategy` on `RunOptions`: the first minimises cost, the second
+  minimises energy taken from the grid. Only the objective differs, so the two are comparable.
+- `flow_table` and `state_table`, the data behind a dispatch and a state plot in long form, so a
+  study can write CSVs and a figure script can redraw from them without re-solving.
+
 ### Removed
 
 - The Documenter site and the `docs/` tree. The deploy never worked without a `DOCUMENTER_KEY` and

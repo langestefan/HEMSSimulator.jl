@@ -79,8 +79,14 @@ as an accounting error — which is exactly how the EV's first draft looked.
   because wasting energy costs money; negative day-ahead prices (common in NL) make it profitable.
   `RunOptions.check_degeneracy` warns, `RunOptions.exclusive` adds the binaries that fix it. Under
   full netting buy and sell prices are equal, which is why `RunOptions.price_epsilon` exists.
-- **Terminal value matters.** Without valuing end-of-window storage the receding horizon empties the
-  battery every 24 h. Handled by the 48/24 window overlap plus `RunOptions.terminal_value`.
+- **Terminal value matters — but only when the step is a large fraction of the window.** Without
+  valuing end-of-window storage the 48/24 receding horizon empties the battery every day; measured
+  on a June week, a 10 kWh battery's savings collapse from 622 to 424. In MPC geometry (24 h window,
+  15-minute step) the opposite holds: the window end is never implemented, so the credit only makes
+  the optimizer hoard, and leaving it on costs about 10% of the savings. Set
+  `terminal_value = false` whenever the step is small relative to the window.
+- **A 15-minute step buys nothing over an hourly one, and costs 4x.** Same June week, same battery:
+  411.5 / 622.3 EUR of savings at both steps, to four significant figures.
 - **Self-consumption is attributed per interval** (`min(PV, on-site demand)`). Total export is not a
   proxy for un-consumed PV once a battery can export grid-charged energy.
 - **Synthetic weather cloudiness is bimodal on purpose.** A constant clearness index puts Erbs
@@ -146,6 +152,27 @@ default when `Threads.nthreads() > 1`. Eight candidates over a year went from 30
 4.1x speedup — bounded by the candidate count, not the core count, and with the baseline simulation
 still serial. Start Julia with `-t auto` or it does nothing. A test asserts the threaded and serial
 tables are identical.
+
+## Strategies
+
+`RunOptions.strategy` selects what the controller optimizes. It is two weights, not a branch — see
+`objective_weights` — so adding one means a method rather than an `if` in the model builder.
+`EconomicStrategy` is (0, 1) and reproduces the objective exactly as it was before strategies
+existed; `GreenStrategy` is (1, ε).
+
+Green needs no rule against grid-charging: charging from the grid *is* an import, and a round trip
+loses energy, so an import-minimising optimizer never does it. Two measured consequences on the 2025
+study: Green cycles the battery *less* than Economic, not more (the worry was that ε scales
+`degradation_cost` away — it does, but Green only ever moves bounded PV surplus while Economic also
+arbitrages); and Green is immune to the negative-price degeneracy, because dumping energy can only
+raise the imports it is minimising.
+
+## Experiments
+
+`experiments/<nnn>-<slug>/` holds one study each, and **simulation and plotting are separate
+steps**: `run.jl` writes CSVs and never loads Makie, `figures.jl` reads them back. A year at a
+15-minute step is 35 040 solves per candidate — half an hour for a sweep — against a minute to
+redraw every figure. `flow_table` and `state_table` exist to make that split possible.
 
 ## Data sources
 

@@ -362,6 +362,19 @@ function _window_kpis(result::SimulationResult, rows)
     """
 end
 
+# RunOptions is immutable, so a strategy switch rebuilds it field for field.
+_with_strategy(o::RunOptions, strategy) = RunOptions(
+    o.window_hours,
+    o.step_hours,
+    o.optimizer,
+    o.exclusive,
+    o.terminal_value,
+    o.price_epsilon,
+    o.check_degeneracy,
+    strategy,
+    o.silent,
+)
+
 function HEMSSimulator.dashboard(
     system::HomeSystem,
     weather::Weather,
@@ -369,31 +382,34 @@ function HEMSSimulator.dashboard(
     contracts,
     candidates::AbstractVector{<:AbstractAsset};
     options::RunOptions = RunOptions(),
+    strategies = nothing,
     width::Integer = 3,
     max_points::Integer = PLOT_MAX_POINTS,
     size = (1500, 900),
 )
     regimes = contracts isa Contract ? (; contract = contracts) : contracts
+    plans = strategies === nothing ? (; strategy = options.strategy) : strategies
     isempty(candidates) && throw(ArgumentError("give at least one candidate asset"))
     grid = weather.grid
     days = cld(grid.n, intervals_per_day(grid))
 
-    # One simulation per (scenario, candidate), computed the first time it is asked for. Scrubbing
-    # the window never triggers one; changing a menu does, once.
-    cache = Dict{Tuple{Symbol,Int},SimulationResult}()
-    function simulation(scenario::Symbol, candidate::Int)
-        return get!(cache, (scenario, candidate)) do
+    # One simulation per (scenario, candidate, strategy), computed the first time it is asked for.
+    # Scrubbing the window never triggers one; changing a menu does, once.
+    cache = Dict{Tuple{Symbol,Int,Symbol},SimulationResult}()
+    function simulation(scenario::Symbol, candidate::Int, plan::Symbol)
+        return get!(cache, (scenario, candidate, plan)) do
             simulate(
                 with_assets(system, vcat(system.assets, [candidates[candidate]])),
                 weather,
                 load_kw,
                 regimes[scenario];
-                options,
+                options = _with_strategy(options, plans[plan]),
             )
         end
     end
 
     scenario_names = collect(keys(regimes))
+    plan_names = collect(keys(plans))
     battery_labels = [
         c isa Battery ? string(c.capacity_kwh, " kWh") : string(nameof(typeof(c)), " ", i) for (i, c) in enumerate(candidates)
     ]
@@ -403,7 +419,7 @@ function HEMSSimulator.dashboard(
     right = figure[1, 2] = GridLayout(; tellheight = false)
     colsize!(figure.layout, 1, Relative(0.78))
 
-    initial = simulation(first(scenario_names), 1)
+    initial = simulation(first(scenario_names), 1, first(plan_names))
     panel_count = sum(
         length(state_panels(a, initial, i)) for (i, a) in enumerate(initial.system.assets);
         init = 0,
@@ -433,12 +449,18 @@ function HEMSSimulator.dashboard(
     series = flow_series(initial)
     labels = vcat(first.(series.sources), first.(series.sinks))
     toggles = [Toggle(figure; active = true) for _ in labels]
-    right[3, 1] = grid!(
+    right[next_row, 1] = grid!(
         hcat([Label(figure, l; halign = :left) for l in labels], [t for t in toggles]);
         tellheight = false,
     )
 
-    readout = Label(right[4, 1], ""; halign = :left, justification = :left, font = :regular)
+    readout = Label(
+        right[next_row+1, 1],
+        "";
+        halign = :left,
+        justification = :left,
+        font = :regular,
+    )
 
     function refresh()
         scenario = scenario_names[findfirst(
@@ -464,7 +486,10 @@ function HEMSSimulator.dashboard(
             max_points,
             include = keep,
         )
-        dispatch_axis.title = "Dispatch — $(scenario), $(battery_labels[candidate])"
+        dispatch_axis.title =
+            length(plan_names) > 1 ?
+            "Dispatch — $(scenario), $(battery_labels[candidate]), $(plan)" :
+            "Dispatch — $(scenario), $(battery_labels[candidate])"
 
         panels = StatePanel[]
         for (index, asset) in enumerate(result.system.assets)
@@ -494,12 +519,13 @@ function HEMSSimulator.dashboard(
     end
     on(_ -> refresh(), scenario_menu.selection)
     on(_ -> refresh(), battery_menu.selection)
+    strategy_menu === nothing || on(_ -> refresh(), strategy_menu.selection)
     for toggle in toggles
         on(_ -> refresh(), toggle.active)
     end
     refresh()
 
-    return (; figure, refresh, sliders, scenario_menu, battery_menu, toggles)
+    return (; figure, refresh, sliders, scenario_menu, battery_menu, strategy_menu, toggles)
 end
 
 # ---------------------------------------------------------------------------------------------
