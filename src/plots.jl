@@ -790,7 +790,9 @@ tariff is flat across its interval and jumps at the boundary.
   - **day** and **width** sliders move the window over the horizon. Free — no resimulation.
   - **scenario**, **battery** and, when more than one is offered, **strategy** menus. Every
     combination is simulated *before the window opens* — see `precompute` — so switching is instant.
-  - **toggles** filter the dispatch stack. State panels always show every asset.
+  - **toggles** filter the dispatch stack.
+  - **rows** collapse whole panels — prices, energy, and one per asset state — to nothing, giving
+    their height to what is left. The date labels follow the lowest panel still showing.
   - two rows of **cards**. The first is the visible window — from the grid, to the grid, PV used, and
     what that window cost at the dispatch price. The second is the business case for the selection,
     and does not move when the window does: annual bill, annual saving against the same home with no

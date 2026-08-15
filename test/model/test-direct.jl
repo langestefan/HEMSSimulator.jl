@@ -13,14 +13,25 @@
     )
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180),
+        ],
         assets = [
             Battery(10.0, 5.0; degradation_cost = 0.02),
-            ElectricVehicle(grid; capacity_kwh = 60.0, charge_power_kw = 11.0, km_per_day = 40),
+            ElectricVehicle(
+                grid;
+                capacity_kwh = 60.0,
+                charge_power_kw = 11.0,
+                km_per_day = 40,
+            ),
         ],
     )
-    settings(direct) =
-        RunOptions(window_hours = 24, step_hours = 6, terminal_value = false, direct = direct)
+    settings(direct) = RunOptions(
+        window_hours = 24,
+        step_hours = 6,
+        terminal_value = false,
+        direct = direct,
+    )
 
     fast = simulate(home, weather, load, contract; options = settings(true))
     cached = simulate(home, weather, load, contract; options = settings(false))

@@ -593,10 +593,11 @@ function HEMSSimulator.dashboard(
     colsize!(figure.layout, 1, Relative(0.80))
 
     initial = simulation(first(scenario_names), 1, first(plan_names))
-    panel_count = sum(
-        length(state_panels(a, initial, i)) for (i, a) in enumerate(initial.system.assets);
-        init = 0,
-    )
+    initial_panels = StatePanel[]
+    for (index, asset) in enumerate(initial.system.assets)
+        append!(initial_panels, state_panels(asset, initial, index))
+    end
+    panel_count = length(initial_panels)
 
     # VRM's arrangement: a section heading, the unit written horizontally above the axis rather than
     # rotated beside it, the plot, then a horizontal legend underneath. Prices on top, energy below.
@@ -664,6 +665,62 @@ function HEMSSimulator.dashboard(
         ),
     )
 
+    # ---- collapsible rows -------------------------------------------------------------------
+    # A section is a block of rows in `left` plus the blocks that draw into them. Collapsing zeroes
+    # the rows *and* hides the drawing: `rowsize!(Fixed(0))` alone leaves the plot rendering into a
+    # zero-height strip, which reads as a stray line rather than as an absence.
+    row_gap = 12.0
+    rowgap!(left, row_gap)
+    left_rows = 10 + panel_count
+
+    price_rows, energy_rows = 1:4, 5:8
+    section_rows = vcat([price_rows, energy_rows], [(8+r):(8+r) for r = 1:panel_count])
+    section_axis = vcat([3, 7], [8 + r for r = 1:panel_count])
+    section_weight = vcat([1.8, 2.6], fill(1.2, panel_count))
+    section_names = vcat(["prices", "energy"], [p.label for p in initial_panels])
+    # The legends are rebuilt on a theme change, so they are looked up rather than captured.
+    section_blocks = vcat(
+        [
+            () -> Any[headings[1], units[1], price_axis, get(legends, 1, nothing)],
+            () -> Any[headings[2], units[2], energy_axis, get(legends, 2, nothing)],
+        ],
+        [(r -> () -> Any[state_axes[r]])(r) for r = 1:panel_count],
+    )
+
+    _hide!(::Nothing, _) = nothing
+    function _hide!(block, visible::Bool)
+        block.blockscene.visible[] = visible
+        block isa Axis && (block.scene.visible[] = visible)
+        return nothing
+    end
+
+    row_toggles = [Toggle(figure; active = true) for _ in section_names]
+    row_labels = [Label(figure, name; halign = :left) for name in section_names]
+
+    function _apply_collapse!()
+        hidden = Set{Int}()
+        for (index, rows) in enumerate(section_rows)
+            visible = row_toggles[index].active[]
+            for row in rows
+                rowsize!(left, row, if !visible
+                    Fixed(0)
+                elseif row == section_axis[index]
+                    Auto(section_weight[index])
+                else
+                    Auto()
+                end)
+                visible || push!(hidden, row)
+            end
+            foreach(b -> _hide!(b, visible), section_blocks[index]())
+        end
+        # A gap next to a collapsed row would still take space, so it is recomputed from scratch
+        # rather than toggled per section — two neighbours must not fight over the gap they share.
+        for gap = 1:(left_rows-1)
+            rowgap!(left, gap, (gap in hidden || gap + 1 in hidden) ? 0.0 : row_gap)
+        end
+        return nothing
+    end
+
     scenario_menu = Menu(
         right[1, 1];
         options = string.(scenario_names),
@@ -715,8 +772,18 @@ function HEMSSimulator.dashboard(
     labels = vcat(first.(series.sources), first.(series.sinks))
     toggles = [Toggle(figure; active = true) for _ in labels]
     toggle_labels = [Label(figure, l; halign = :left) for l in labels]
-    right[next_row, 1] =
-        grid!(hcat(toggle_labels, [t for t in toggles]); tellheight = false)
+    # `tellheight = true` so each toggle block hugs its own heading; with `false` the two groups
+    # share the leftover height and the "rows" label drifts away from the toggles it names.
+    right[next_row, 1] = grid!(hcat(toggle_labels, [t for t in toggles]); tellheight = true)
+    rows_heading = Label(
+        right[next_row+1, 1, Top()],
+        "rows";
+        halign = :left,
+        tellwidth = false,
+        padding = (0, 0, 4, 10),
+    )
+    right[next_row+1, 1] =
+        grid!(hcat(row_labels, [t for t in row_toggles]); tellheight = true)
 
     window_label =
         Label(left[10+panel_count, 1], ""; halign = :left, fontsize = 11, tellwidth = false)
@@ -834,7 +901,15 @@ function HEMSSimulator.dashboard(
             axis.ylabelcolor = _c(active.muted)
             axis.titlecolor = _c(active.foreground)
         end
-        for label in vcat(headings, menu_labels, toggle_labels, card_heads, money_heads)
+        for label in vcat(
+            headings,
+            menu_labels,
+            toggle_labels,
+            row_labels,
+            rows_heading,
+            card_heads,
+            money_heads,
+        )
             label.color = _c(active.foreground)
         end
         for label in vcat(units, window_label, row_labels)
@@ -856,7 +931,7 @@ function HEMSSimulator.dashboard(
             menu.cell_color_active = _c(active.grid)
             menu.selection_cell_color_inactive = _c(active.panel)
         end
-        for toggle in toggles
+        for toggle in vcat(toggles, row_toggles)
             toggle.framecolor_inactive = _c(active.grid)
             toggle.framecolor_active = first(_colour(active.colours.battery))
         end
@@ -976,8 +1051,12 @@ function HEMSSimulator.dashboard(
             axis.xlabelvisible = false
             axis.ylabelvisible = false
         end
-        last(stacked).xticklabelsvisible = true
-        last(stacked).xlabelvisible = true
+        # The *lowest visible* axis carries the dates. Using the lowest axis outright would hide the
+        # time axis entirely the moment someone collapsed the bottom panel.
+        shown = [a for (a, t) in zip(stacked, row_toggles) if t.active[]]
+        bottom = isempty(shown) ? last(stacked) : last(shown)
+        bottom.xticklabelsvisible = true
+        bottom.xlabelvisible = true
 
         window = _window_totals(result, rows)
         card_values[1].text[] = "$(round(window.imported; digits = 1)) kWh"
@@ -1019,7 +1098,14 @@ function HEMSSimulator.dashboard(
     for toggle in toggles
         on(_ -> refresh(), toggle.active)
     end
+    for toggle in row_toggles
+        on(toggle.active) do _
+            _apply_collapse!()
+            refresh()          # the date labels move to whichever axis is now lowest
+        end
+    end
     _apply_theme!()
+    _apply_collapse!()
     refresh()
 
     return (;
@@ -1031,6 +1117,7 @@ function HEMSSimulator.dashboard(
         strategy_menu,
         theme_menu,
         toggles,
+        row_toggles,
         palette,
     )
 end

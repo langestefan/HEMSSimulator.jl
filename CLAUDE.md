@@ -389,9 +389,17 @@ Five design points worth not undoing:
 
 `dashboard` is the interactive one: it **reuses `dispatch_plot!` and `state_plot!` and redraws on
 change** rather than being rebuilt around observables, so the interactive view and the static
-figures share one drawing path and cannot drift. Its toggles filter the dispatch stack only — the
-state panels always show every asset, because collapsing rows in a Makie `GridLayout` is fragile and
-the stack is what actually becomes unreadable.
+figures share one drawing path and cannot drift. Two sets of toggles: *series* filter the dispatch
+stack, *rows* collapse whole panels.
+
+**Collapsing a row needs three things, not one.** `rowsize!(left, row, Fixed(0))` zeroes the row but
+leaves the plot drawing into a zero-height strip, which renders as a stray line across the figure —
+so the block's `scene` (the plotted content) and its `blockscene` (ticks, labels, spines) are both
+hidden as well. Row *gaps* are then recomputed from scratch rather than toggled per section, because
+two neighbouring sections share a gap and would otherwise fight over it. And `refresh` puts the date
+labels on the lowest *visible* axis: keying them to the lowest axis outright loses the time axis
+entirely the moment someone collapses the bottom panel. An earlier note here called this fragile and
+said the state panels must always show; that was wrong, and the three points above are why.
 
 **Every combination is simulated before the window opens, threaded, not on first selection.** This
 looks like the wasteful choice and is not: a menu callback runs on the thread that draws, so a solve
