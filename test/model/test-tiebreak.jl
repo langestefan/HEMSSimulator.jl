@@ -1,4 +1,5 @@
-@testitem "the tie-break makes the optimum unique across solvers" tags = [:integration, :fast] begin
+@testitem "the tie-break makes the optimum unique across solvers" tags =
+    [:integration, :fast] begin
     using Dates: DateTime, Minute
     using JuMP: optimizer_with_attributes, value
     using HiGHS: HiGHS
@@ -8,30 +9,51 @@
     # Step-holding an hourly price onto quarter-hours is what creates the ties: four consecutive
     # intervals cost exactly the same, so when to charge is a coin flip for the optimizer.
     hourly = synthetic_prices(TimeGrid(DateTime(2024, 6, 1), Minute(60), 24 * 4))
-    prices = resample(StepHold(), timestamps(TimeGrid(DateTime(2024, 6, 1), Minute(60), 24 * 4)),
-                      hourly, grid)
+    prices = resample(
+        StepHold(),
+        timestamps(TimeGrid(DateTime(2024, 6, 1), Minute(60), 24 * 4)),
+        hourly,
+        grid,
+    )
     weather = synthetic_weather(grid, site; seed = 5)
     load = synthetic_load(grid; annual_kwh = 3500)
-    contract = Contract(grid; commodity = prices .+ 0.02, feed_in = 0.04,
-                        net_metering_fraction = 0.0)
+    contract = Contract(
+        grid;
+        commodity = prices .+ 0.02,
+        feed_in = 0.04,
+        net_metering_fraction = 0.0,
+    )
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180),
+        ],
         assets = AbstractAsset[
-            ElectricVehicle(grid; capacity_kwh = 60.0, charge_power_kw = 11.0, km_per_day = 40),
+            ElectricVehicle(
+                grid;
+                capacity_kwh = 60.0,
+                charge_power_kw = 11.0,
+                km_per_day = 40,
+            ),
             Battery(10.0, 5.0),
         ],
     )
     settings(; tie_break, optimizer = HiGHS.Optimizer, direct = true) = RunOptions(;
-        window_hours = 24, step_hours = 1.0, terminal_value = false,
-        tie_break, optimizer, direct,
+        window_hours = 24,
+        step_hours = 1.0,
+        terminal_value = false,
+        tie_break,
+        optimizer,
+        direct,
     )
-    presolve_off =
-        optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "off")
+    presolve_off = optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "off")
 
     with = simulate(home, weather, load, contract; options = settings(tie_break = 1e-6))
     other = simulate(
-        home, weather, load, contract;
+        home,
+        weather,
+        load,
+        contract;
         options = settings(tie_break = 1e-6, optimizer = presolve_off),
     )
     # Two solver settings, one answer. This is the property the tie-break exists to give.
@@ -52,8 +74,11 @@
     dispatch_cost(tie) = begin
         options = settings(tie_break = tie)
         ctx = HEMSSimulator.DispatchContext(
-            HEMSSimulator.window(grid, 1, len), hours(grid),
-            HEMSSimulator.window(inputs, 1, len), options, 1,
+            HEMSSimulator.window(grid, 1, len),
+            hours(grid),
+            HEMSSimulator.window(inputs, 1, len),
+            options,
+            1,
         )
         vars, _, _ = solve_window(home, ctx, states)
         dt = hours(grid)

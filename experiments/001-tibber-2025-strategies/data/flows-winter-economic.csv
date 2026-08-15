@@ -311,10 +311,10 @@ timestamp,hour,series,direction,kw
 2025-01-15T05:15:00.0,5.25,import,source,0.20662908824329423
 2025-01-15T05:30:00.0,5.5,import,source,0.24167521093679364
 2025-01-15T05:45:00.0,5.75,import,source,0.36197853389592766
-2025-01-15T06:00:00.0,6.0,import,source,0.0
-2025-01-15T06:15:00.0,6.25,import,source,0.0
-2025-01-15T06:30:00.0,6.5,import,source,0.7075689541096142
-2025-01-15T06:45:00.0,6.75,import,source,0.10421374404349149
+2025-01-15T06:00:00.0,6.0,import,source,0.36013031592138284
+2025-01-15T06:15:00.0,6.25,import,source,0.4516523822317234
+2025-01-15T06:30:00.0,6.5,import,source,0.0
+2025-01-15T06:45:00.0,6.75,import,source,0.0
 2025-01-15T07:00:00.0,7.0,import,source,0.0
 2025-01-15T07:15:00.0,7.25,import,source,0.0
 2025-01-15T07:30:00.0,7.5,import,source,0.0
@@ -397,8 +397,8 @@ timestamp,hour,series,direction,kw
 2025-01-16T02:45:00.0,26.75,import,source,0.16446089412032122
 2025-01-16T03:00:00.0,27.0,import,source,16.182628265755415
 2025-01-16T03:15:00.0,27.25,import,source,16.18457898571393
-2025-01-16T03:30:00.0,27.5,import,source,14.251026143479978
-2025-01-16T03:45:00.0,27.75,import,source,15.662732267046032
+2025-01-16T03:30:00.0,27.5,import,source,16.166526007603068
+2025-01-16T03:45:00.0,27.75,import,source,13.74723240292294
 2025-01-16T04:00:00.0,28.0,import,source,0.15931671596317912
 2025-01-16T04:15:00.0,28.25,import,source,0.18452628408588861
 2025-01-16T04:30:00.0,28.5,import,source,0.18246679495093948
@@ -555,10 +555,10 @@ timestamp,hour,series,direction,kw
 2025-01-17T18:15:00.0,66.25,import,source,0.0
 2025-01-17T18:30:00.0,66.5,import,source,0.0
 2025-01-17T18:45:00.0,66.75,import,source,0.0
-2025-01-17T19:00:00.0,67.0,import,source,0.0
+2025-01-17T19:00:00.0,67.0,import,source,0.12048636174986949
 2025-01-17T19:15:00.0,67.25,import,source,0.0
 2025-01-17T19:30:00.0,67.5,import,source,0.0
-2025-01-17T19:45:00.0,67.75,import,source,0.12048636174986949
+2025-01-17T19:45:00.0,67.75,import,source,0.0
 2025-01-17T20:00:00.0,68.0,import,source,1.0364266113377592
 2025-01-17T20:15:00.0,68.25,import,source,0.9806823383692288
 2025-01-17T20:30:00.0,68.5,import,source,0.9059392538147514
@@ -575,7 +575,7 @@ timestamp,hour,series,direction,kw
 2025-01-17T23:15:00.0,71.25,import,source,0.20826930617229225
 2025-01-17T23:30:00.0,71.5,import,source,0.18228921389064887
 2025-01-17T23:45:00.0,71.75,import,source,0.1696196151635757
-2025-01-15T00:00:00.0,0.0,battery discharge,source,-0.0
+2025-01-15T00:00:00.0,0.0,battery discharge,source,0.0
 2025-01-15T00:15:00.0,0.25,battery discharge,source,-0.0
 2025-01-15T00:30:00.0,0.5,battery discharge,source,-0.0
 2025-01-15T00:45:00.0,0.75,battery discharge,source,0.0
@@ -587,22 +587,22 @@ timestamp,hour,series,direction,kw
 2025-01-15T02:15:00.0,2.25,battery discharge,source,-0.0
 2025-01-15T02:30:00.0,2.5,battery discharge,source,-0.0
 2025-01-15T02:45:00.0,2.75,battery discharge,source,-0.0
-2025-01-15T03:00:00.0,3.0,battery discharge,source,-0.0
-2025-01-15T03:15:00.0,3.25,battery discharge,source,-0.0
-2025-01-15T03:30:00.0,3.5,battery discharge,source,-0.0
+2025-01-15T03:00:00.0,3.0,battery discharge,source,0.0
+2025-01-15T03:15:00.0,3.25,battery discharge,source,0.0
+2025-01-15T03:30:00.0,3.5,battery discharge,source,0.0
 2025-01-15T03:45:00.0,3.75,battery discharge,source,0.0
 2025-01-15T04:00:00.0,4.0,battery discharge,source,-0.0
-2025-01-15T04:15:00.0,4.25,battery discharge,source,-0.0
-2025-01-15T04:30:00.0,4.5,battery discharge,source,-0.0
+2025-01-15T04:15:00.0,4.25,battery discharge,source,0.0
+2025-01-15T04:30:00.0,4.5,battery discharge,source,0.0
 2025-01-15T04:45:00.0,4.75,battery discharge,source,0.0
 2025-01-15T05:00:00.0,5.0,battery discharge,source,-0.0
-2025-01-15T05:15:00.0,5.25,battery discharge,source,-0.0
-2025-01-15T05:30:00.0,5.5,battery discharge,source,-0.0
+2025-01-15T05:15:00.0,5.25,battery discharge,source,0.0
+2025-01-15T05:30:00.0,5.5,battery discharge,source,0.0
 2025-01-15T05:45:00.0,5.75,battery discharge,source,0.0
-2025-01-15T06:00:00.0,6.0,battery discharge,source,0.36013031592138284
-2025-01-15T06:15:00.0,6.25,battery discharge,source,0.5255014804780712
-2025-01-15T06:30:00.0,6.5,battery discharge,source,0.0
-2025-01-15T06:45:00.0,6.75,battery discharge,source,0.5308773691628705
+2025-01-15T06:00:00.0,6.0,battery discharge,source,-0.0
+2025-01-15T06:15:00.0,6.25,battery discharge,source,0.07384909824634782
+2025-01-15T06:30:00.0,6.5,battery discharge,source,0.7075689541096142
+2025-01-15T06:45:00.0,6.75,battery discharge,source,0.635091113206362
 2025-01-15T07:00:00.0,7.0,battery discharge,source,0.7867546030237837
 2025-01-15T07:15:00.0,7.25,battery discharge,source,0.7941896224659678
 2025-01-15T07:30:00.0,7.5,battery discharge,source,0.8720576935162184
@@ -749,7 +749,7 @@ timestamp,hour,series,direction,kw
 2025-01-16T18:45:00.0,42.75,battery discharge,source,1.6954735873665776
 2025-01-16T19:00:00.0,43.0,battery discharge,source,0.0
 2025-01-16T19:15:00.0,43.25,battery discharge,source,0.0
-2025-01-16T19:30:00.0,43.5,battery discharge,source,-0.0
+2025-01-16T19:30:00.0,43.5,battery discharge,source,0.0
 2025-01-16T19:45:00.0,43.75,battery discharge,source,-0.0
 2025-01-16T20:00:00.0,44.0,battery discharge,source,0.0
 2025-01-16T20:15:00.0,44.25,battery discharge,source,0.0
@@ -843,10 +843,10 @@ timestamp,hour,series,direction,kw
 2025-01-17T18:15:00.0,66.25,battery discharge,source,1.243390625806917
 2025-01-17T18:30:00.0,66.5,battery discharge,source,1.2873269276005417
 2025-01-17T18:45:00.0,66.75,battery discharge,source,1.5641222093015403
-2025-01-17T19:00:00.0,67.0,battery discharge,source,1.3129277628721936
+2025-01-17T19:00:00.0,67.0,battery discharge,source,1.192441401122324
 2025-01-17T19:15:00.0,67.25,battery discharge,source,1.4813273732195396
 2025-01-17T19:30:00.0,67.5,battery discharge,source,1.3005204968319408
-2025-01-17T19:45:00.0,67.75,battery discharge,source,1.326315618282445
+2025-01-17T19:45:00.0,67.75,battery discharge,source,1.4468019800323144
 2025-01-17T20:00:00.0,68.0,battery discharge,source,0.0
 2025-01-17T20:15:00.0,68.25,battery discharge,source,0.0
 2025-01-17T20:30:00.0,68.5,battery discharge,source,0.0
@@ -1549,8 +1549,8 @@ timestamp,hour,series,direction,kw
 2025-01-16T02:45:00.0,26.75,battery charge,sink,0.0
 2025-01-16T03:00:00.0,27.0,battery charge,sink,5.0
 2025-01-16T03:15:00.0,27.25,battery charge,sink,5.0
-2025-01-16T03:30:00.0,27.5,battery charge,sink,3.08450013587691
-2025-01-16T03:45:00.0,27.75,battery charge,sink,5.0
+2025-01-16T03:30:00.0,27.5,battery charge,sink,5.0
+2025-01-16T03:45:00.0,27.75,battery charge,sink,3.08450013587691
 2025-01-16T04:00:00.0,28.0,battery charge,sink,0.0
 2025-01-16T04:15:00.0,28.25,battery charge,sink,0.0
 2025-01-16T04:30:00.0,28.5,battery charge,sink,0.0

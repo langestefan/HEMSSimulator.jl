@@ -89,7 +89,16 @@ as an accounting error — which is exactly how the EV's first draft looked.
   far more than any per-window difference would suggest.
 
   `RunOptions.tie_break` (default 1e-6 EUR/kWh **per interval of delay**) prices a tiny preference for
-  acting earlier and makes the optimum unique; with it on, all three solvers return identical flows.
+  acting earlier and makes each window's optimum unique. **It does not buy solver independence, and
+  do not claim that it does**: per window from an identical starting state the solvers now agree
+  exactly (0.0000 kW across 60 sampled windows), but over a full year HiGHS with and without presolve
+  still land EUR 0.42 apart, against EUR 0.51 before. Uniqueness to 1e-9 is not identity, and 35 040
+  feedback steps amplify the remainder. There is also a second class of tie it does not touch: the
+  term prefers acting *earlier* but says nothing about *which source* serves a sink, so discharging
+  the battery against importing at equal marginal cost is still a free choice.
+
+  What it does buy is reproducibility for a fixed solver configuration, at no measurable cost — the
+  dispatch cost of a single window is unchanged to 1e-6.
   Note the *per interval*: an earlier version spread the same total across the window, which put the
   step between neighbours below HiGHS's 1e-7 dual tolerance, and the term was silently ignored. The
   bound is two-sided and both ends are measured — above 1e-7 to be seen at all, below the smallest
