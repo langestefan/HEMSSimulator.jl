@@ -132,8 +132,8 @@ function source_mix(result::SimulationResult, sink::AbstractString)
     )
     total = sum(rows.kwh)
     shares = NamedTuple(
-        Symbol(replace(row.source, " " => "_")) => (total > 0 ? row.kwh / total : NaN) for
-        row in eachrow(rows)
+        Symbol(replace(row.source, " " => "_")) => (total > 0 ? row.kwh / total : NaN)
+        for row in eachrow(rows)
     )
     return merge((; total_kwh = total), shares)
 end

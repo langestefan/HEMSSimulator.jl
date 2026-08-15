@@ -209,6 +209,22 @@ How a simulation is run: the rolling-horizon geometry, the solver, and the model
     simultaneously charges and discharges.
   - `strategy::AbstractStrategy`: what the controller optimizes for. See [`AbstractStrategy`](@ref).
   - `silent::Bool`: suppress solver output.
+  - `tie_break::Float64`: a tiny preference for acting **earlier**, €/kWh *per interval of delay*. The dispatch LP routinely has several optima — four quarter-hours inside a step-held
+    hourly price cost exactly the same, so charging in any of them is equally optimal — and which one
+    a solver returns is arbitrary. That is invisible to the controller and *not* invisible to the
+    bill, because [`settle`](@ref) reads the flows rather than the objective: on a 2025 year, HiGHS
+    with and without presolve and Clp all hit the same optimum to 5e-15 and produced annual bills
+    €0.51 apart. This term makes the optimum unique so results are reproducible across solvers.
+
+    Its size is squeezed from both ends, and *per interval* is what makes the bound checkable. It
+    must clear the solver's dual-feasibility tolerance (1e-7 for HiGHS) or the term is ignored and
+    the tie goes back to being arbitrary; it must stay under the smallest real price difference
+    between neighbouring intervals (1.21e-5 €/kWh in the 2025 Dutch data) or it would override
+    genuine economics. The default of 1e-6 is 10x the former and 12x below the latter. Set it to
+    `0.0` to restore the old, solver-dependent behaviour.
+
+    Note how much of the horizon this touches: step-holding an hourly price onto quarter-hours makes
+    19 753 of 2025's 35 040 adjacent intervals *exactly* equal, so more than half the year is a tie.
   - `direct::Bool`: build each window with JuMP's [`direct_model`](https://jump.dev/JuMP.jl/stable/manual/models/#Direct-mode)
     instead of the default caching layer. Worth about 27% of a window: the cache has to be *copied*
     into the solver at `optimize!`, and on this model that copy costs nearly as much as the solve.
@@ -227,6 +243,7 @@ struct RunOptions{O,S<:AbstractStrategy}
     strategy::S
     silent::Bool
     direct::Bool
+    tie_break::Float64
 end
 
 # Written out rather than `@kwdef` so that the hours accept any `Real`: `step_hours = 0.25` and
@@ -243,6 +260,7 @@ RunOptions(;
     strategy::AbstractStrategy = EconomicStrategy(),
     silent::Bool = true,
     direct::Bool = true,
+    tie_break::Real = 1.0e-6,
 ) = RunOptions(
     float(window_hours),
     float(step_hours),
@@ -254,6 +272,7 @@ RunOptions(;
     strategy,
     silent,
     direct,
+    float(tie_break),
 )
 
 """

@@ -503,6 +503,7 @@ _with_strategy(o::RunOptions, strategy) = RunOptions(
     strategy,
     o.silent,
     o.direct,
+    o.tie_break,
 )
 
 function HEMSSimulator.dashboard(

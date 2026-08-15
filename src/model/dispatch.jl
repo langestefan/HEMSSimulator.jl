@@ -75,6 +75,28 @@ function build_window(system::HomeSystem, ctx::DispatchContext, states)
     for (asset, vars) in zip(system.assets, asset_vars)
         add_to_expression!(objective, weights.cost, cost_terms(model, asset, ctx, vars))
     end
+    # Break ties towards acting earlier. Without it the LP has many optima — a step-held price is
+    # flat across four quarter-hours, so charging in any of them is equally optimal — and the solver
+    # picks one arbitrarily. The controller cannot tell the difference; `settle` can, because it
+    # reads the flows. Earlier rather than later is the robust tie-break for a receding horizon: a
+    # window that banks its energy early is not relying on a forecast that may not hold.
+    if ctx.options.tie_break > 0 && n > 1
+        # The increment is *per interval*, not spread across the window. Normalising by the window
+        # length would make the step between neighbours `tie_break / (n - 1)`, which at 96 intervals
+        # falls below the solver's dual-feasibility tolerance and is ignored — the tie then goes back
+        # to being resolved arbitrarily, which is the whole problem.
+        scale = ctx.options.tie_break * dt
+        for k = 1:n
+            add_to_expression!(objective, scale * (k - 1), imported[k])
+        end
+        for (asset, vars) in zip(system.assets, asset_vars)
+            terms = power_terms(asset, vars)
+            for k = 1:n
+                add_to_expression!(objective, scale * (k - 1), terms.consumption[k])
+            end
+        end
+    end
+
     @objective(model, Min, objective)
 
     vars = (; imported, exported, curtail, assets = asset_vars)

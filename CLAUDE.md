@@ -75,6 +75,25 @@ as an accounting error — which is exactly how the EV's first draft looked.
 
 ### Things that will bite you
 
+- **The LP is massively degenerate, and the receding horizon amplifies it.** Step-holding an hourly
+  price onto quarter-hours makes **19 753 of 2025's 35 040 adjacent intervals exactly equal**, so more
+  than half the year offers the optimizer a free choice of when to charge. Every solver finds an
+  optimum — HiGHS with and without presolve and Clp agreed to 5e-15 — but they picked *different
+  vertices*, differing by 11 kW (a whole EV charger) in individual intervals. That is invisible to the
+  controller and visible to the bill, because `settle` reads the flows and not the objective: the same
+  year came out EUR 226.58 / 227.02 / 227.53 depending on the solver, a 0.4% spread that is **wider
+  than the NPV gap between adjacent battery sizes**.
+
+  It compounds, too. A different tie in one window carries a different state into the next, so the
+  trajectories diverge rather than staying a perturbation apart — which is why whole-run totals move
+  far more than any per-window difference would suggest.
+
+  `RunOptions.tie_break` (default 1e-6 EUR/kWh **per interval of delay**) prices a tiny preference for
+  acting earlier and makes the optimum unique; with it on, all three solvers return identical flows.
+  Note the *per interval*: an earlier version spread the same total across the window, which put the
+  step between neighbours below HiGHS's 1e-7 dual tolerance, and the term was silently ignored. The
+  bound is two-sided and both ends are measured — above 1e-7 to be seen at all, below the smallest
+  real price difference between neighbours (1.21e-5 EUR/kWh in this data) to not override economics.
 - **The LP is degenerate under negative prices.** It avoids charging and discharging at once only
   because wasting energy costs money; negative day-ahead prices (common in NL) make it profitable.
   `RunOptions.check_degeneracy` warns, `RunOptions.exclusive` adds the binaries that fix it. Under

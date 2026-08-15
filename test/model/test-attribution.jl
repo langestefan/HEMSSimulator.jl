@@ -13,9 +13,16 @@
     )
     home = HomeSystem(
         site = site,
-        pv = [PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180)],
+        pv = [
+            PVArray(dc_capacity_kwp = 5.0, ac_capacity_kw = 4.5, tilt = 35, azimuth = 180),
+        ],
         assets = AbstractAsset[
-            ElectricVehicle(grid; capacity_kwh = 60.0, charge_power_kw = 11.0, km_per_day = 40),
+            ElectricVehicle(
+                grid;
+                capacity_kwh = 60.0,
+                charge_power_kw = 11.0,
+                km_per_day = 40,
+            ),
             Battery(10.0, 5.0),
         ],
     )
@@ -59,19 +66,20 @@ end
     @test sum(shares) ≈ 1.0 rtol = 1e-9
     @test use.available_kwh ≈ sum(result.frame.pv_available_kw) * dt rtol = 1e-9
     @test all(>=(-1e-12), shares)
-    @test use.curtailed ≈
-          sum(result.frame.curtail_kw) / sum(result.frame.pv_available_kw) rtol = 1e-9
+    @test use.curtailed ≈ sum(result.frame.curtail_kw) / sum(result.frame.pv_available_kw) rtol =
+        1e-9
 end
 
-@testitem "source_mix splits a sink into shares that sum to one" tags = [:integration, :fast] setup =
-    [Attributed] begin
+@testitem "source_mix splits a sink into shares that sum to one" tags =
+    [:integration, :fast] setup = [Attributed] begin
     for sink in ("ev charge", "battery charge", "base load")
         mix = source_mix(result, sink)
         shares = [getfield(mix, k) for k in keys(mix) if k !== :total_kwh]
         @test sum(shares) ≈ 1.0 rtol = 1e-9
         @test all(>=(-1e-12), shares)
     end
-    @test source_mix(result, "base load").total_kwh ≈ sum(result.frame.load_kw) * dt rtol = 1e-9
+    @test source_mix(result, "base load").total_kwh ≈ sum(result.frame.load_kw) * dt rtol =
+        1e-9
 
     # A typo must not quietly answer "0% from everything".
     @test_throws ArgumentError source_mix(result, "ev charging")
