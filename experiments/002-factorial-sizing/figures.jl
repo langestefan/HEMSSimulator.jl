@@ -80,9 +80,6 @@ end
 const COLUMNS = 4
 cell(index) = (fldmod1(index, COLUMNS))
 
-# The colour of the "this one wins" marker. Deliberately outside `SERIES_COLOURS` — it has to read as
-# annotation rather than as a sixth array size, and the palette's warmest entry is a vermillion that
-# a red cross drawn on top of it would disappear into. Stroked in white for the same reason.
 # What the money figures were priced at. Every NPV in this study is one point in `investment.jl`'s
 # price sweep, so a chart of it that does not say which point is a chart of an unnamed number. Both
 # halves of the capex are named because "400 EUR/kWh" alone would understate a small pack: a 2.5 kWh
@@ -91,6 +88,9 @@ const PRICING =
     "battery at $(Int(RESULTS_PER_KWH)) EUR/kWh plus $(Int(FIXED_CAPEX)) EUR fixed, " *
     "$(round(Int, 100DISCOUNT_RATE))% discount"
 
+# The colour of the "this one wins" marker. Deliberately outside `SERIES_COLOURS` — it has to read as
+# annotation rather than as a sixth array size, and the palette's warmest entry is a vermillion that
+# a red cross drawn on top of it would disappear into. Stroked in white for the same reason.
 const OPTIMUM_MARKER = (
     color = RGBf(0.85, 0.0, 0.10),
     marker = :xcross,
