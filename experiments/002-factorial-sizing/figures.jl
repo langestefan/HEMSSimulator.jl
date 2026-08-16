@@ -73,6 +73,14 @@ cell(index) = (fldmod1(index, COLUMNS))
 # The colour of the "this one wins" marker. Deliberately outside `SERIES_COLOURS` — it has to read as
 # annotation rather than as a sixth array size, and the palette's warmest entry is a vermillion that
 # a red cross drawn on top of it would disappear into. Stroked in white for the same reason.
+# What the money figures were priced at. Every NPV in this study is one point in `investment.jl`'s
+# price sweep, so a chart of it that does not say which point is a chart of an unnamed number. Both
+# halves of the capex are named because "400 EUR/kWh" alone would understate a small pack: a 2.5 kWh
+# battery costs 400 + 400 x 2.5, which is 560 EUR/kWh installed, not 400.
+const PRICING =
+    "battery at $(Int(RESULTS_PER_KWH)) EUR/kWh plus $(Int(FIXED_CAPEX)) EUR fixed, " *
+    "$(round(Int, 100DISCOUNT_RATE))% discount"
+
 const OPTIMUM_MARKER = (
     color = RGBf(0.85, 0.0, 0.10),
     marker = :xcross,
@@ -147,7 +155,7 @@ save_figure(
     facet(
         :npv,
         "EUR",
-        "Net present value over $(LIFETIME_YEARS) years at $(round(Int, 100DISCOUNT_RATE))% discount";
+        "Net present value over $(LIFETIME_YEARS) years — $(PRICING)";
         zero_line = true,
         mark_max = true,
     ),
@@ -191,7 +199,8 @@ let
     figure = Figure(size = (620, 34 * length(ORDER) + 190))
     axis = Axis(
         figure[1, 1];
-        title = "NPV-optimal battery, kWh (label) over its NPV, EUR (colour)",
+        title = "NPV-optimal battery, kWh (label) over its NPV, EUR (colour)\n$(PRICING)",
+        titlesize = 13,
         xlabel = "array, kWp",
         ylabel = "",
         xticks = (eachindex(SIZES), [string(Int(kwp)) for kwp in SIZES]),
