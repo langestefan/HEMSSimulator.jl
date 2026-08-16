@@ -21,8 +21,14 @@ function attribution(result)
     # household that charged badly.
     share(source, sink) =
         (total = get(per_sink, sink, 0.0); total > 0 ? at(source, sink) / total : NaN)
-    return (; at, share)
+    into(sink) = get(per_sink, sink, 0.0)
+    return (; at, share, into)
 end
+
+# The sinks that are actually *final demand*. Export leaves the house, and battery charge is storage
+# rather than consumption — the energy comes back out again as battery discharge and would be counted
+# twice. So the house consumes exactly these two things.
+const FINAL_DEMAND = ("base load", "ev charge")
 
 function metrics(config, result, bill, baseline_bill)
     dt = hours(result.grid)
@@ -34,6 +40,15 @@ function metrics(config, result, bill, baseline_bill)
     # Measured against what the array *could* have made, not what it made: a home that curtails a
     # third of its panels is not using its solar well, and a ratio over production hides that.
     of_solar(sink) = available > 0 ? a.at("PV", sink) / available : NaN
+
+    # Self-sufficiency counting the car. The package's `self_sufficiency` measures the *base load*
+    # alone, so at a given array every scenario here reports the identical number — the car is not
+    # "household consumption" to it. That is defensible as a house metric and useless as a household
+    # one: a 20 kWh/day commute changes what this home buys from the grid enormously and would not
+    # move that column at all. These three put the car back in, over final demand only.
+    demand = sum(a.into(sink) for sink in FINAL_DEMAND)
+    of_demand(source) =
+        demand > 0 ? sum(a.at(source, sink) for sink in FINAL_DEMAND) / demand : NaN
 
     capacity = config.kwh
     economics = if capacity > 0
@@ -107,7 +122,16 @@ function metrics(config, result, bill, baseline_bill)
             battery_from_solar_share = a.share("PV", "battery charge"),
             battery_from_grid_share = a.share("grid", "battery charge"),
 
+            # Final demand — the base load plus the car, which is what the household actually
+            # consumes. These three sum to 1 and are the household-level counterpart to
+            # `self_sufficiency` below.
+            demand_kwh = demand,
+            demand_from_solar_share = of_demand("PV"),
+            demand_from_grid_share = of_demand("grid"),
+            demand_from_battery_share = of_demand("battery discharge"),
             self_consumption = self_consumption(result),
+            # The package's definition: the base load alone, so this moves with the array and not
+            # with the car. Read `demand_from_grid_share` for the household.
             self_sufficiency = self_sufficiency(result),
         ),
         economics,

@@ -219,6 +219,15 @@ default when `Threads.nthreads() > 1`. Eight candidates over a year went from 30
 still serial. Start Julia with `-t auto` or it does nothing. A test asserts the threaded and serial
 tables are identical.
 
+**Threading is strongly sublinear, and a lightly loaded measurement will not tell you that.** On the
+32-core machine this is developed on, one annual configuration (PV + battery + EV, 15-minute step)
+takes **228 s when 5 run concurrently and 498 s when 32 do**. Thirty-two threads therefore deliver
+2.7x the throughput of five, not 6.4x: the solve is bound by memory bandwidth, not by cores, and
+loading every core more than doubles each individual solve. Experiment 001's sweep — 5 candidates —
+measured 90% per-worker efficiency, and extrapolating that to 32 workers under-predicted a 400-run
+study by a factor of two and a half. Size a study from a *saturated* measurement, never from a
+sweep narrower than the core count.
+
 The other lever is **not solving the same configuration twice**, which a study does more than it
 looks. `sweep` returns a table and discards every `SimulationResult` it computed, so `run.jl` then
 re-solves two of them — its no-battery baseline *is* the sweep's baseline, and its reference battery

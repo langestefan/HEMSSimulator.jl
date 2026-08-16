@@ -47,12 +47,13 @@ const INVESTMENT =
 # ---------------------------------------------------------------------------------------------
 # Scenarios: the context the decision is made in.
 #
-# A full factorial over every factor below would be 4320 runs and most of a day. These eight are
-# one-at-a-time deviations from a single base case, which buys the *sensitivity* of the sizing
-# answer to each factor — the thing the factorial was wanted for — at a fifteenth of the cost. What
-# it does not buy is interactions: this design cannot see whether a slow charger matters *more* on a
-# small connection. Where a scenario moves the optimum a long way, that pair is worth a follow-up
-# grid of its own.
+# A full factorial over every factor below would be 4320 runs and, at the throughput this machine
+# actually reaches with every core loaded, about 27 hours. So the scenarios are **sampled in waves**
+# instead, each wave chosen in the light of what the previous one found.
+#
+# Waves are cumulative and the whole list is always run. That costs nothing to re-run: every
+# simulation is cached by content, so a wave already solved comes back from disk and only the new one
+# goes to the solver. Adding a wave is therefore an append here and nothing else.
 
 const BASE_CASE = (;
     orientation = :south,            # :south, or :east_west split across two roof faces
@@ -66,7 +67,9 @@ const BASE_CASE = (;
 
 scenario(name; kwargs...) = merge((; name = name), BASE_CASE, NamedTuple(kwargs))
 
-const SCENARIOS = [
+# Wave 1 — one factor at a time. This is what buys the *sensitivity* of the sizing answer to each
+# factor, which is the thing the factorial was wanted for, at a fifteenth of the cost.
+const WAVE_1 = [
     scenario("base"),
     # Azimuth alone: tilt stays at 35 degrees so the comparison isolates orientation. A real
     # east-west system is usually laid flatter than that, which would flatter it slightly.
@@ -78,6 +81,37 @@ const SCENARIOS = [
     scenario("lossy"; battery_efficiency = 0.90, ev_efficiency = 0.85),
     scenario("efficient"; battery_efficiency = 0.975, ev_efficiency = 0.95),
 ]
+
+# Wave 2 — the interactions wave 1 structurally cannot see, plus the one commute level it skipped.
+#
+# One-at-a-time answers "how much does this factor matter, on its own". It cannot answer "does a
+# slow charger matter *more* when the connection is small", and that is exactly the question a
+# household with both would be asking. Each pair here is one wave-1 factor combined with another
+# that plausibly reinforces it.
+const WAVE_2 = [
+    # Completes the commute ladder: 5, 10, 15, 20 kWh per workday.
+    scenario("mid-mileage"; ev_kwh_per_day = 15.0),
+    # Both limits on charging power at once. A 4 kW charger behind a 9.2 kW connection has almost no
+    # room to chase a cheap hour, and the battery is the only thing left that can.
+    scenario("slow-charger+small-connection"; ev_charge_kw = 4.0, connection_kw = 9.2),
+    # 20 kWh a day through a 4 kW charger is 5 hours of charging that must fit inside the plugged-in
+    # window whatever the price does. This is where flexibility runs out.
+    scenario("high-mileage+slow-charger"; ev_kwh_per_day = 20.0, ev_charge_kw = 4.0),
+    scenario("high-mileage+small-connection"; ev_kwh_per_day = 20.0, connection_kw = 9.2),
+    # East-west spreads generation across the day instead of piling it at noon, which should relieve
+    # an export cap. Wave 1 shows the cap binding at 12 kWp south; this asks whether the roof layout
+    # is a cheaper answer to that than the battery is.
+    scenario("east-west+small-connection"; orientation = :east_west, connection_kw = 9.2),
+    # The efficiency penalty where the throughput is largest.
+    scenario(
+        "lossy+high-mileage";
+        ev_kwh_per_day = 20.0,
+        battery_efficiency = 0.90,
+        ev_efficiency = 0.85,
+    ),
+]
+
+const SCENARIOS = vcat(WAVE_1, WAVE_2)
 
 # ---------------------------------------------------------------------------------------------
 # The controller, identical to experiment 001 so the two studies are comparable.
