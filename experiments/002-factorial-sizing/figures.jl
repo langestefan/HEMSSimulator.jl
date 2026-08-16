@@ -45,8 +45,18 @@ const ORDER = [s.name for s in SCENARIOS if s.name in results.scenario]
 const SIZES = sort(unique(results.pv_kwp))
 const WAVE_OF = Dict(s.name => wave_of(s.name) for s in SCENARIOS)
 
-block(scenario) = sort(results[results.scenario .== scenario, :], [:pv_kwp, :battery_kwh])
+block(source, scenario) =
+    sort(source[source.scenario .== scenario, :], [:pv_kwp, :battery_kwh])
 sized(frame) = frame[frame.battery_kwh .> 0, :]
+
+# `investment.jl` re-prices every simulated case across the cell-price and discount ladders and
+# writes the result. Reading it back rather than recomputing NPV here keeps the three steps separate
+# — simulate, analyse, draw — so a chart can never disagree with the table it is a picture of.
+# Absent when only `run.jl` has been run; the price figures are then simply skipped.
+const SWEEP_PATH = joinpath(DATA, "investment-sweep.csv")
+const SWEEP = isfile(SWEEP_PATH) ? read_table(DATA, "investment-sweep") : nothing
+priced_at(per_kwh, rate = DISCOUNT_RATE) =
+    SWEEP[(SWEEP.capex_per_kwh .== per_kwh) .& (SWEEP.discount_rate .== rate), :]
 
 function minor_ticks!(axis)
     major, minor = RGBAf(0, 0, 0, 0.10), RGBAf(0, 0, 0, 0.04)
@@ -89,7 +99,48 @@ const OPTIMUM_MARKER = (
     strokecolor = :white,
 )
 
-function facet(column, ylabel, title; zero_line = false, mark_max = false)
+# One panel's worth of curves: capacity on x, `column` on y, one line per array size.
+function draw_curves!(axis, frame, column; mark_max = false, zero_line = false)
+    for (level, kwp) in enumerate(SIZES)
+        line = frame[frame.pv_kwp .== kwp, :]
+        isempty(line) && continue
+        shade = series_colour(level)
+        values = line[!, column]
+        lines!(axis, line.battery_kwh, values; linewidth = 2, color = shade)
+        scatter!(axis, line.battery_kwh, values; markersize = 6, color = shade)
+        # The best candidate on this curve. Drawn after the line so it is never occluded, and drawn
+        # per curve rather than per panel because the question is which battery to buy *given* an
+        # array — not which array to buy.
+        if mark_max && any(isfinite, values)
+            peak = argmax(replace(values, NaN => -Inf))
+            scatter!(axis, [line.battery_kwh[peak]], [values[peak]]; OPTIMUM_MARKER...)
+        end
+    end
+    zero_line && hlines!(axis, [0.0]; color = (:black, 0.35), linewidth = 0.8)
+    return minor_ticks!(axis)
+end
+
+function curve_legend(figure, row; mark_max = false)
+    handles = Any[
+        LineElement(color = series_colour(level), linewidth = 3) for
+        level in eachindex(SIZES)
+    ]
+    labels = [string(Int(kwp), " kWp") for kwp in SIZES]
+    if mark_max
+        push!(handles, MarkerElement(; OPTIMUM_MARKER...))
+        push!(labels, "best size")
+    end
+    return Legend(
+        figure[row, 1:COLUMNS],
+        handles,
+        labels;
+        orientation = :horizontal,
+        framevisible = false,
+    )
+end
+
+# One panel per scenario, at a single price.
+function facet(column, ylabel, title; source = results, zero_line = false, mark_max = false)
     rows = cld(length(ORDER), COLUMNS)
     figure = Figure(size = (330 * COLUMNS, 250 * rows + 90))
     Label(figure[0, 1:COLUMNS], title; fontsize = 17, font = :bold)
@@ -107,45 +158,51 @@ function facet(column, ylabel, title; zero_line = false, mark_max = false)
             xlabel = index + COLUMNS > length(ORDER) ? "battery, kWh" : "",
             ylabel = col == 1 ? ylabel : "",
         )
-        for (level, kwp) in enumerate(SIZES)
-            frame = sized(block(name))
-            line = frame[frame.pv_kwp .== kwp, :]
-            isempty(line) && continue
-            shade = series_colour(level)
-            lines!(axis, line.battery_kwh, line[!, column]; linewidth = 2, color = shade)
-            scatter!(axis, line.battery_kwh, line[!, column]; markersize = 6, color = shade)
-            # The best candidate on this curve. Drawn last so it sits above every line, and drawn
-            # per curve rather than per panel because the question is which battery to buy *given*
-            # an array — not which array to buy.
-            if mark_max
-                values = line[!, column]
-                any(isfinite, values) || continue
-                peak = argmax(replace(values, NaN => -Inf))
-                scatter!(axis, [line.battery_kwh[peak]], [values[peak]]; OPTIMUM_MARKER...)
-            end
-        end
-        zero_line && hlines!(axis, [0.0]; color = (:black, 0.35), linewidth = 0.8)
-        minor_ticks!(axis)
+        draw_curves!(axis, sized(block(source, name)), column; mark_max, zero_line)
         push!(axes, axis)
     end
     # One shared scale, or the panels cannot be compared — which is the only reason to face them.
     linkaxes!(axes...)
-    handles = Any[
-        LineElement(color = series_colour(level), linewidth = 3) for
-        level in eachindex(SIZES)
-    ]
-    labels = [string(Int(kwp), " kWp") for kwp in SIZES]
-    if mark_max
-        push!(handles, MarkerElement(; OPTIMUM_MARKER...))
-        push!(labels, "best size")
-    end
-    Legend(
-        figure[cld(length(ORDER), COLUMNS)+1, 1:COLUMNS],
-        handles,
-        labels;
-        orientation = :horizontal,
-        framevisible = false,
+    curve_legend(figure, rows + 1; mark_max)
+    return figure
+end
+
+# One panel per cell price, at a single scenario. The other way round from `facet`, and the figure
+# that actually answers "how does the answer move with the price of a battery".
+#
+# **Axes are deliberately not linked here.** At 100 EUR/kWh the NPVs are several times those at 400,
+# so a shared scale would flatten the dear panels into featureless lines — and the shape of each
+# curve, especially where its peak sits, is the whole point. The zero line is drawn in every panel
+# so the one comparison that does need a common reference still has one.
+function price_facet(scenario_name; rate = DISCOUNT_RATE)
+    prices = sort(unique(SWEEP.capex_per_kwh); rev = true)
+    rows = cld(length(prices), COLUMNS)
+    figure = Figure(size = (330 * COLUMNS, 250 * rows + 110))
+    Label(
+        figure[0, 1:COLUMNS],
+        "Net present value against battery price — `$scenario_name`, " *
+        "plus $(Int(FIXED_CAPEX)) EUR fixed, $(round(Int, 100rate))% discount";
+        fontsize = 17,
+        font = :bold,
     )
+    for (index, per_kwh) in enumerate(prices)
+        row, col = cell(index)
+        axis = Axis(
+            figure[row, col];
+            title = "$(Int(per_kwh)) EUR/kWh",
+            titlesize = 13,
+            xlabel = index + COLUMNS > length(prices) ? "battery, kWh" : "",
+            ylabel = col == 1 ? "EUR" : "",
+        )
+        draw_curves!(
+            axis,
+            sized(block(priced_at(per_kwh, rate), scenario_name)),
+            :npv;
+            mark_max = true,
+            zero_line = true,
+        )
+    end
+    curve_legend(figure, rows + 1; mark_max = true)
     return figure
 end
 
@@ -182,13 +239,44 @@ save_figure(
 )
 
 # ---------------------------------------------------------------------------------------------
+# The same NPV, at every cell price. Needs `investment.jl` to have run.
+
+if SWEEP === nothing
+    @warn "no investment-sweep.csv; run investment.jl for the price figures" SWEEP_PATH
+else
+    # One figure per scenario would be twenty; `base` is the reference every other scenario is
+    # measured against, so it is the one that carries the price comparison.
+    save_figure(FIGS, "npv-by-price", price_facet("base"))
+
+    # And the scenario grid at four prices spanning the ladder, so the *ranking between scenarios*
+    # can be checked for stability as batteries get cheaper — a factor that matters at 400 EUR/kWh
+    # and stops mattering at 100 would be worth knowing about, and is invisible in a single figure.
+    for per_kwh in (400.0, 300.0, 200.0, 100.0)
+        per_kwh in SWEEP.capex_per_kwh || continue
+        save_figure(
+            FIGS,
+            "npv-at-$(Int(per_kwh))",
+            facet(
+                :npv,
+                "EUR",
+                "Net present value — battery at $(Int(per_kwh)) EUR/kWh plus " *
+                "$(Int(FIXED_CAPEX)) EUR fixed, $(round(Int, 100DISCOUNT_RATE))% discount";
+                source = priced_at(per_kwh),
+                zero_line = true,
+                mark_max = true,
+            ),
+        )
+    end
+end
+
+# ---------------------------------------------------------------------------------------------
 # The sizing answer itself, as one picture: which battery wins, everywhere.
 
 let
     optimum = fill(NaN, length(ORDER), length(SIZES))
     gain = fill(NaN, length(ORDER), length(SIZES))
     for (row, name) in enumerate(ORDER), (col, kwp) in enumerate(SIZES)
-        frame = sized(block(name))
+        frame = sized(block(results, name))
         candidates = frame[frame.pv_kwp .== kwp, :]
         isempty(candidates) && continue
         best = candidates[argmax(candidates.npv), :]
