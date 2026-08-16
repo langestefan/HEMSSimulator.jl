@@ -1,10 +1,15 @@
-# How large a battery is worth buying, across a grid of PV sizes and eight household contexts.
+# How large a battery is worth buying, across a grid of PV sizes and a list of contexts.
 #
 #     julia --project=. -t auto experiments/002-factorial-sizing/run.jl
 #
-# 8 scenarios x 5 PV sizes x 10 battery sizes = 400 annual simulations at a 15-minute step, each of
-# them 35 040 solves. On 32 threads that is roughly an hour. See `run-config.jl` for why eight named
-# scenarios rather than the full factorial over the same factors, which would be 4320 runs.
+# Scenarios x 5 PV sizes x 10 battery sizes annual simulations at a 15-minute step, each of them
+# 35 040 solves. Measured on 32 threads: about 500 s per no-battery configuration and 800 s per
+# battery one, so roughly 2.5 finished configurations a minute. See `run-config.jl` for why named
+# scenarios sampled in waves rather than the full factorial, which would be 4320 runs and a day.
+#
+# **Re-running is cheap and is the intended workflow.** Every wave already solved comes back from the
+# cache; only what is new reaches the solver. So adding a wave means editing `run-config.jl` and
+# running this again, not managing which parts to skip.
 #
 # **Simulation only.** Everything this produces is a CSV in `data/`; not a single plot is drawn, and
 # Makie is never loaded.
