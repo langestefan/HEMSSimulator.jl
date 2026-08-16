@@ -272,6 +272,24 @@ steps**: `run.jl` writes CSVs and never loads Makie, `figures.jl` reads them bac
 15-minute step is 35 040 solves per candidate — half an hour for a sweep — against a minute to
 redraw every figure. `flow_table` and `state_table` exist to make that split possible.
 
+Two things are shared across studies rather than copied into each:
+
+- **`experiments/tibber.jl`** holds the tariff calibration — the supplier's own line items, the
+  import/export spread that follows from netting being off, and `tibber_contract`. Two studies that
+  price a kWh differently and are then compared is a bug that no test would catch, so there is one
+  definition and both studies include it.
+- **`experiments/common.jl`** makes directories and writes files, and nothing else. Every modelling
+  choice belongs to the study.
+
+**A study that cannot be run exhaustively should sample in waves, not shrink its grid.** Experiment
+002's factors are 4320 combinations, about 27 hours here. It runs 5 x 10 *decisions* (array x
+battery) against a list of named *scenarios* that grows a wave at a time: wave 1 one factor at a
+time for sensitivity, wave 2 the interaction pairs wave 1 showed were worth asking about. Waves are
+cumulative and the whole list is always re-run, which is free because `simulate(...; cache = true)`
+keys on content — an already-solved wave comes back from disk and only the new one reaches the
+solver. Adding a wave is an append to `run-config.jl` and nothing else. The same property makes a
+crashed run resumable and makes adding a KPI column cost minutes rather than the whole study.
+
 ## Data sources
 
 `ENTSOE.jl` is unregistered, so it is a hard dependency resolved through a `[sources]` **url** entry

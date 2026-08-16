@@ -150,7 +150,7 @@ let
         yticks = (eachindex(ORDER), ORDER),
         yreversed = true,
     )
-    map = heatmap!(
+    plot = heatmap!(
         axis,
         eachindex(SIZES),
         eachindex(ORDER),
@@ -171,7 +171,7 @@ let
             strokecolor = (:black, 0.55),
         )
     end
-    Colorbar(figure[1, 2], map; label = "NPV of the best battery, EUR")
+    Colorbar(figure[1, 2], plot; label = "NPV of the best battery, EUR")
     save_figure(FIGS, "optimum", figure)
 end
 
