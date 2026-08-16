@@ -64,7 +64,9 @@ function facet(column, ylabel, title; zero_line = false)
             figure[row, col];
             title = name * (WAVE_OF[name] == 2 ? "  (wave 2)" : ""),
             titlesize = 12,
-            xlabel = row == rows ? "battery, kWh" : "",
+            # The last row is short — 14 scenarios in a 4-wide grid — so "is this the bottom row"
+            # is the wrong question. Label whatever has nothing under it, in every column.
+            xlabel = index + COLUMNS > length(ORDER) ? "battery, kWh" : "",
             ylabel = col == 1 ? ylabel : "",
         )
         for (level, kwp) in enumerate(SIZES)
@@ -194,8 +196,10 @@ reference = let
 end
 
 function composition(columns, labels, colours, title, subtitle)
-    figure = Figure(size = (860, 30 * nrow(reference) + 230))
-    Label(figure[0, 1], title; fontsize = 17, font = :bold)
+    # Wide enough that the bars still have room once the longest combined scenario name has taken
+    # its share of the axis.
+    figure = Figure(size = (1120, 30 * nrow(reference) + 210))
+    Label(figure[0, 1], title; fontsize = 17, font = :bold, padding = (0, 0, 0, 6))
     axis = Axis(
         figure[1, 1];
         title = subtitle,
