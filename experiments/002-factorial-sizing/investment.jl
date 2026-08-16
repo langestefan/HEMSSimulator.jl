@@ -110,17 +110,16 @@ let
 end
 
 best(frame) = isempty(frame) ? nothing : frame[argmax(frame.npv), :]
-at(; scenario = nothing, kwp = nothing, per_kwh = nothing, rate = nothing) = priced[
-    (scenario===nothing ? trues(nrow(priced)) :
-     priced.scenario .== scenario) .& (kwp===nothing ? trues(nrow(priced)) :
-                                       priced.pv_kwp .== kwp) .& (per_kwh===nothing ?
-                                                                  trues(nrow(priced)) :
-                                                                  priced.capex_per_kwh .== per_kwh) .& (rate===nothing ?
-                                                                                                        trues(
-        nrow(priced),
-    ) : priced.discount_rate .== rate),
-    :,
-]
+# One slice of the priced grid. Every argument is optional and an omitted one is not filtered on, so
+# the tables below can each cut it a different way without four near-identical selectors.
+function at(; scenario = nothing, kwp = nothing, per_kwh = nothing, rate = nothing)
+    keep = trues(nrow(priced))
+    scenario === nothing || (keep .&= priced.scenario .== scenario)
+    kwp === nothing || (keep .&= priced.pv_kwp .== kwp)
+    per_kwh === nothing || (keep .&= priced.capex_per_kwh .== per_kwh)
+    rate === nothing || (keep .&= priced.discount_rate .== rate)
+    return priced[keep, :]
+end
 cellname(pick) =
     pick === nothing ? "-" : @sprintf("%.1f (%.0f)", pick.battery_kwh, pick.npv)
 
