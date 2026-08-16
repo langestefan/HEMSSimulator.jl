@@ -22,6 +22,23 @@ const DATA = data_dir(@__FILE__)
 const FIGS = figures_dir(@__FILE__)
 
 results = read_table(DATA, "results")
+
+# The `demand_from_*` columns were added to `kpis.jl` after the first wave had already been written,
+# so a table from before that is missing them. Rebuild them from the per-sink shares, which is
+# exactly how they are defined: final demand is the base load plus the car, each supplied by its own
+# mix. A figure should not fail because of when its input happened to be produced.
+if !hasproperty(results, :demand_from_grid_share)
+    demand = results.base_load_kwh .+ results.ev_charge_kwh
+    for source in ("solar", "grid", "battery")
+        results[!, Symbol("demand_from_", source, "_share")] =
+            (
+                results.base_load_kwh .*
+                results[!, Symbol("load_from_", source, "_share")] .+
+                results.ev_charge_kwh .* results[!, Symbol("ev_from_", source, "_share")]
+            ) ./ demand
+    end
+    results[!, :demand_kwh] = demand
+end
 # Draw scenarios in the order they were designed in, not alphabetically: wave 1 is the one-at-a-time
 # ladder and reads as one, and `base` belongs first because everything else is measured against it.
 const ORDER = [s.name for s in SCENARIOS if s.name in results.scenario]
