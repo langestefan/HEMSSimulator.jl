@@ -91,10 +91,14 @@ const BASE_CASE = (;
     battery_efficiency = 0.95,       # one-way, so 0.9025 round trip
     ev_efficiency = 0.92,
     battery_hours = 2.0,             # capacity divided by power; 2 h is how home products are sold
+    battery_soc_min = 0.05,          # reserve held back, as a fraction of capacity
     v2g_kw = 0.0,                    # EV discharge rating; zero disables vehicle-to-grid
+    ev_capacity_kwh = 60.0,
+    ev_departure = 7.5,              # clock hours, UTC like every timestamp here
+    ev_return = 17.5,
     tariff = :dynamic,               # :dynamic spot-linked, or :flat at the year's mean
     net_metering = 0.0,              # salderen fraction: 0 abolished, 1 in full
-    transport = :fixed,              # :fixed capacity charge, or :time_of_use per kWh
+    transport = :fixed,              # :fixed capacity charge, :time_of_use, or :export_charge
 )
 
 scenario(name; kwargs...) = merge((; name = name), BASE_CASE, NamedTuple(kwargs))
@@ -170,8 +174,76 @@ const WAVE_3 = [
     scenario("4-hour-battery"; battery_hours = 4.0),
 ]
 
-const SCENARIOS = vcat(WAVE_1, WAVE_2, WAVE_3)
-const WAVES = (WAVE_1, WAVE_2, WAVE_3)
+# Wave 4 — the export side of the bill, and the netting ramp as it is actually legislated.
+#
+# Wave 3 asks netting on or off. The Netherlands is not doing either: it is phasing salderen down
+# through intermediate fractions, and suppliers have separately begun charging for export. Both
+# change what a kWh sent to the grid is worth, which is precisely what a battery competes against.
+const WAVE_4 = [
+    scenario("netting-quarter"; net_metering = 0.25),
+    scenario("netting-half"; net_metering = 0.5),
+    scenario("netting-three-quarter"; net_metering = 0.75),
+    # A per-kWh charge on export. The package's `feed_in_fee` is a flat annual amount and so cannot
+    # change any dispatch decision; a charge levied per exported kWh can, and is what makes storing
+    # a surplus better than selling it.
+    scenario("export-charge"; transport = :export_charge),
+    scenario("export-charge+netting-half"; transport = :export_charge, net_metering = 0.5),
+    # The world most Dutch households were in until recently: a fixed price and full salderen. The
+    # battery should be worth almost nothing here, and this says how nearly nothing.
+    scenario("flat-tariff+net-metering"; tariff = :flat, net_metering = 1.0),
+]
+
+# Wave 5 — the hardware and the habits, rather than the tariff.
+const WAVE_5 = [
+    # Power against energy, either side of the two-hour default.
+    scenario("1-hour-battery"; battery_hours = 1.0),
+    scenario("3-hour-battery"; battery_hours = 3.0),
+    # A pack that holds back a fifth rather than a twentieth. Nameplate capacity is not usable
+    # capacity, and the gap between them is a spec sheet's most common exaggeration.
+    scenario("shallow-battery"; battery_soc_min = 0.20),
+    scenario("small-ev"; ev_capacity_kwh = 40.0),
+    scenario("big-ev"; ev_capacity_kwh = 80.0),
+    # A car that is home for most of the day: it can absorb the midday peak the house cannot.
+    scenario("home-worker"; ev_departure = 9.5, ev_return = 15.5, ev_kwh_per_day = 5.0),
+]
+
+# Wave 6 — the biggest levers found so far, crossed with each other.
+#
+# Wave 2 established that the *household* factors are additive to within about 55 EUR. That is a
+# finding about those factors, not a law, and the tariff levers of wave 3 act on a different part of
+# the bill entirely. These pairs test whether additivity survives crossing the two groups.
+const WAVE_6 = [
+    scenario(
+        "efficient+tou-transport";
+        battery_efficiency = 0.975,
+        ev_efficiency = 0.95,
+        transport = :time_of_use,
+    ),
+    scenario(
+        "lossy+net-metering";
+        battery_efficiency = 0.90,
+        ev_efficiency = 0.85,
+        net_metering = 1.0,
+    ),
+    scenario("v2g+tou-transport"; v2g_kw = 12.0, transport = :time_of_use),
+    scenario("v2g+high-mileage"; v2g_kw = 12.0, ev_kwh_per_day = 20.0),
+    scenario("east-west+net-metering"; orientation = :east_west, net_metering = 1.0),
+    scenario(
+        "efficient+export-charge";
+        battery_efficiency = 0.975,
+        ev_efficiency = 0.95,
+        transport = :export_charge,
+    ),
+]
+
+const WAVES = (WAVE_1, WAVE_2, WAVE_3, WAVE_4, WAVE_5, WAVE_6)
+
+# Which waves to run. Waves are cumulative, so this is a prefix: `HEMS_MAX_WAVE=4` runs waves 1-4 and
+# leaves 5 and 6 for a later invocation. It exists so a long unattended queue can refresh its tables
+# and figures *between* waves rather than only at the end — a study whose outputs lag its data by six
+# hours is unreadable at the moment someone checks on it.
+const MAX_WAVE = parse(Int, get(ENV, "HEMS_MAX_WAVE", string(length(WAVES))))
+const SCENARIOS = vcat(WAVES[1:clamp(MAX_WAVE, 1, length(WAVES))]...)
 wave_of(name) = findfirst(wave -> any(s -> s.name == name, wave), WAVES)
 
 # ---------------------------------------------------------------------------------------------
@@ -216,11 +288,13 @@ const EV_DEGRADATION = 0.05          # EUR/kWh of throughput, dispatch objective
 function home(scenario, kwp::Real; grid::TimeGrid = YEAR)
     car = ElectricVehicle(
         grid;
-        capacity_kwh = 60.0,
+        capacity_kwh = scenario.ev_capacity_kwh,
         charge_power_kw = scenario.ev_charge_kw,
         discharge_power_kw = scenario.v2g_kw,
         degradation_cost = scenario.v2g_kw > 0 ? EV_DEGRADATION : 0.0,
         kwh_per_day = scenario.ev_kwh_per_day,
+        departure_hour = scenario.ev_departure,
+        return_hour = scenario.ev_return,
         weekdays_only = true,
         charge_efficiency = scenario.ev_efficiency,
         discharge_efficiency = scenario.ev_efficiency,
@@ -238,6 +312,7 @@ battery(scenario, kwh::Real) = Battery(
     kwh / scenario.battery_hours;
     charge_efficiency = scenario.battery_efficiency,
     discharge_efficiency = scenario.battery_efficiency,
+    soc_min = scenario.battery_soc_min,
     degradation_cost = DEGRADATION,
 )
 
@@ -294,6 +369,12 @@ end
 const PEAK_TRANSPORT = 0.06          # EUR/kWh imported inside the peak, excluding VAT
 const OFFPEAK_TRANSPORT = 0.01       # EUR/kWh imported outside it
 
+# A charge levied on every exported kWh. `Contract.feed_in_fee` is a flat annual amount and therefore
+# cannot change a single dispatch decision — every candidate that exports at all pays the same — so
+# the per-kWh version, which is what actually makes storing a surplus better than selling it, is
+# modelled through the network tariff's export price instead.
+const EXPORT_CHARGE = 0.05           # EUR/kWh exported, excluding VAT
+
 function contract_for(scenario, grid::TimeGrid, prices::AbstractVector)
     spot = if scenario.tariff === :flat
         fill(sum(prices) / length(prices), length(prices))
@@ -309,6 +390,14 @@ function contract_for(scenario, grid::TimeGrid, prices::AbstractVector)
         TimeVaryingGridTariff(;
             import_eur_per_kwh = [p ? PEAK_TRANSPORT : OFFPEAK_TRANSPORT for p in peak],
             annual_eur = NL_TARIFFS_2025.capacity_tariff / 2,
+        )
+    elseif scenario.transport === :export_charge
+        # The capacity charge is kept whole here, unlike the time-of-use case: this scenario *adds* a
+        # charge on export rather than replacing the fixed network bill with a per-kWh one.
+        TimeVaryingGridTariff(;
+            import_eur_per_kwh = zeros(grid.n),
+            export_eur_per_kwh = fill(EXPORT_CHARGE, grid.n),
+            annual_eur = NL_TARIFFS_2025.capacity_tariff,
         )
     else
         throw(ArgumentError("unknown transport $(scenario.transport)"))
