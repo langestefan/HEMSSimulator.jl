@@ -54,7 +54,6 @@ println(
 )
 
 save_inputs(DATA, YEAR, weather, prices, load)
-contract = tibber_contract(YEAR, prices)
 
 # ---------------------------------------------------------------------------------------------
 # The run.
@@ -84,16 +83,28 @@ println(
 Threads.nthreads() == 1 &&
     @warn "running on one thread; start julia with -t auto or this will take a day"
 
-# `inputs` depends on the array layout and on the contract, so it is shared by every configuration
-# with the same scenario orientation and PV size — 10 battery sizes each. Prepared once per pair.
-prepared = Dict{Tuple{Symbol,Float64},SimulationInputs}()
-for orientation in unique(s.orientation for s in SCENARIOS), kwp in PV_KWP
-    key = (orientation, float(kwp))
+# The contract belongs to the scenario from wave 3 onwards, and it changes the *dispatch price
+# signal* as well as the bill — so two scenarios billed differently are different simulations, not
+# one set of flows settled twice. Built once per distinct contract.
+contracts = Dict(contract_key(s) => contract_for(s, YEAR, prices) for s in SCENARIOS)
+contract_of(config) = contracts[contract_key(config.scenario)]
+
+# `inputs` depends on the array layout and on the contract, and on nothing else that varies within a
+# scenario — so all 10 battery sizes of one (orientation, array, contract) share it. Prepared once
+# per distinct triple rather than once per configuration.
+prepared = Dict{Tuple{Symbol,Float64,Any},SimulationInputs}()
+for s in SCENARIOS, kwp in PV_KWP
+    key = (s.orientation, float(kwp), contract_key(s))
     haskey(prepared, key) && continue
-    reference = HomeSystem(site = SITE, pv = arrays(kwp, orientation))
-    prepared[key] = prepare(reference, weather, load, contract; options = OPTIONS)
+    reference = HomeSystem(site = SITE, pv = arrays(kwp, s.orientation))
+    prepared[key] =
+        prepare(reference, weather, load, contracts[contract_key(s)]; options = OPTIONS)
 end
-inputs_for(config) = prepared[(config.scenario.orientation, float(config.kwp))]
+inputs_for(config) = prepared[(
+    config.scenario.orientation,
+    float(config.kwp),
+    contract_key(config.scenario),
+)]
 
 log_lock = ReentrantLock()
 open(SOLVED, "a") do io
@@ -138,7 +149,7 @@ function solve(config, baseline_bill)
     )
     elapsed = @elapsed result =
         simulate(system, inputs_for(config); options = OPTIONS, cache = true)
-    bill = settle(result, contract)
+    bill = settle(result, contract_of(config))
     row = metrics(config, result, bill, baseline_bill)
     note!(row, elapsed)
     return row, bill

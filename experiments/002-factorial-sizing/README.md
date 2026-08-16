@@ -47,11 +47,34 @@ charger matter *more* when the connection is small", which is what a household w
 | `east-west+small-connection` | wave 1 shows the export cap binding at 12 kWp south — is a different roof layout a cheaper answer than a battery? |
 | `lossy+high-mileage` | the efficiency penalty where throughput is largest |
 
+**Wave 3 — the levers that are not about this household at all.** Waves 1 and 2 vary the home; these
+vary the rules it is billed under and the hardware it is billed for, which is what a household cannot
+choose and what the package was built to answer.
+
+| scenario | why |
+|---|---|
+| `net-metering` | salderen still in force — an exported kWh is credited at full retail, so self-consumption has nothing to beat |
+| `tou-transport` | transport charged per kWh with a peak block; levied on physical flow and never netted |
+| `net-metering+tou-transport` | with the two above and `base`, this completes the four regulatory scenarios the settlement engine was built around |
+| `flat-tariff` | a flat commodity price at the year's mean — removes price variance and leaves only self-consumption |
+| `v2g` | the car as a second battery |
+| `4-hour-battery` | half the power for the same energy: is the sizing answer about energy or power? |
+
 Waves are cumulative and the whole list is always run. That costs nothing: every simulation is
 cached by content, so a wave already solved comes back from disk and only the new one goes to the
-solver. **Adding a wave is an append to `WAVE_n` in `run-config.jl` and nothing else.**
+solver. **Adding a wave is an append to `WAVE_n` in `run-config.jl` and nothing else** — and adding a
+*factor* is an append to `BASE_CASE` whose default reproduces the old behaviour, which is what keeps
+earlier waves' cache entries valid.
 
-14 scenarios × 5 × 10 = **700 annual simulations** at a 15-minute control step, 35 040 solves each.
+20 scenarios × 5 × 10 = **1000 annual simulations** at a 15-minute control step, 35 040 solves each.
+
+Two things wave 3 needed that the earlier waves did not. The contract became **per scenario**, and a
+contract changes the dispatch price signal as well as the bill — so two scenarios billed differently
+are different simulations, not one set of flows settled twice; `run.jl` keys its prepared inputs on
+`(orientation, array, contract)` for that reason. And the time-of-use peak window is resolved on the
+**Dutch clock**, not on UTC: the package's `peak_intervals` applies its hours to UTC timestamps, and
+over a year the Netherlands is UTC+1 for part and UTC+2 for the rest, so a single constant is an hour
+wrong at one end — which is the width of the ramp the tariff exists to price.
 
 ## Tariff
 

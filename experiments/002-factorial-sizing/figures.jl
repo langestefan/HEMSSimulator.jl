@@ -43,7 +43,7 @@ end
 # ladder and reads as one, and `base` belongs first because everything else is measured against it.
 const ORDER = [s.name for s in SCENARIOS if s.name in results.scenario]
 const SIZES = sort(unique(results.pv_kwp))
-const WAVE_OF = Dict(vcat([s.name => 1 for s in WAVE_1], [s.name => 2 for s in WAVE_2]))
+const WAVE_OF = Dict(s.name => wave_of(s.name) for s in SCENARIOS)
 
 block(scenario) = sort(results[results.scenario .== scenario, :], [:pv_kwp, :battery_kwh])
 sized(frame) = frame[frame.battery_kwh .> 0, :]
@@ -79,7 +79,9 @@ function facet(column, ylabel, title; zero_line = false)
         row, col = cell(index)
         axis = Axis(
             figure[row, col];
-            title = name * (WAVE_OF[name] == 2 ? "  (wave 2)" : ""),
+            # Wave 1 is the reference ladder and needs no label; anything later is worth marking,
+            # because a reader comparing panels should know which were chosen after seeing results.
+            title = name * (WAVE_OF[name] > 1 ? "  (wave $(WAVE_OF[name]))" : ""),
             titlesize = 12,
             # The last row is short — 14 scenarios in a 4-wide grid — so "is this the bottom row"
             # is the wrong question. Label whatever has nothing under it, in every column.
