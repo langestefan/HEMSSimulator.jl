@@ -43,18 +43,7 @@ println(
 
 save_inputs(DATA, YEAR, weather, prices, load)
 
-# No net metering, flat capacity tariff — the regime the Netherlands is moving to, and the one
-# `run-config.jl`'s calibration was read under. Both prices are spot-linked and the sell price is a
-# series rather than a constant, which is what makes exporting into the evening peak worth doing;
-# `energy_tax` and VAT are charged on import only, which is what keeps a grid round trip unprofitable.
-contract = Contract(
-    YEAR;
-    commodity = prices .+ MARKUP,
-    feed_in = feed_in_price(prices),
-    energy_tax = ENERGY_TAX,
-    net_metering_fraction = 0.0,
-    grid = FixedCapacityTariff(),
-)
+contract = tibber_contract(YEAR, prices)
 
 # The car is part of the household in both arms, so what the sweep reports is what the *battery*
 # adds on top of a car that was already shifting its own load.

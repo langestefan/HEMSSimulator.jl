@@ -34,14 +34,7 @@ include(joinpath(@__DIR__, "run-config.jl"))
 inputs = load_inputs(data_dir(@__FILE__))
 grid, weather, prices, load = inputs.grid, inputs.weather, inputs.prices, inputs.load
 
-contract = Contract(
-    grid;
-    commodity = prices .+ MARKUP,
-    feed_in = feed_in_price(prices),
-    energy_tax = ENERGY_TAX,
-    net_metering_fraction = 0.0,
-    grid = FixedCapacityTariff(),
-)
+contract = tibber_contract(grid, prices)
 
 home = HomeSystem(
     site = SITE,
