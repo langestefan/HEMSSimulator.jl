@@ -70,7 +70,18 @@ end
 const COLUMNS = 4
 cell(index) = (fldmod1(index, COLUMNS))
 
-function facet(column, ylabel, title; zero_line = false)
+# The colour of the "this one wins" marker. Deliberately outside `SERIES_COLOURS` — it has to read as
+# annotation rather than as a sixth array size, and the palette's warmest entry is a vermillion that
+# a red cross drawn on top of it would disappear into. Stroked in white for the same reason.
+const OPTIMUM_MARKER = (
+    color = RGBf(0.85, 0.0, 0.10),
+    marker = :xcross,
+    markersize = 15,
+    strokewidth = 1.2,
+    strokecolor = :white,
+)
+
+function facet(column, ylabel, title; zero_line = false, mark_max = false)
     rows = cld(length(ORDER), COLUMNS)
     figure = Figure(size = (330 * COLUMNS, 250 * rows + 90))
     Label(figure[0, 1:COLUMNS], title; fontsize = 17, font = :bold)
@@ -95,6 +106,15 @@ function facet(column, ylabel, title; zero_line = false)
             shade = series_colour(level)
             lines!(axis, line.battery_kwh, line[!, column]; linewidth = 2, color = shade)
             scatter!(axis, line.battery_kwh, line[!, column]; markersize = 6, color = shade)
+            # The best candidate on this curve. Drawn last so it sits above every line, and drawn
+            # per curve rather than per panel because the question is which battery to buy *given*
+            # an array — not which array to buy.
+            if mark_max
+                values = line[!, column]
+                any(isfinite, values) || continue
+                peak = argmax(replace(values, NaN => -Inf))
+                scatter!(axis, [line.battery_kwh[peak]], [values[peak]]; OPTIMUM_MARKER...)
+            end
         end
         zero_line && hlines!(axis, [0.0]; color = (:black, 0.35), linewidth = 0.8)
         minor_ticks!(axis)
@@ -102,13 +122,19 @@ function facet(column, ylabel, title; zero_line = false)
     end
     # One shared scale, or the panels cannot be compared — which is the only reason to face them.
     linkaxes!(axes...)
+    handles = Any[
+        LineElement(color = series_colour(level), linewidth = 3) for
+        level in eachindex(SIZES)
+    ]
+    labels = [string(Int(kwp), " kWp") for kwp in SIZES]
+    if mark_max
+        push!(handles, MarkerElement(; OPTIMUM_MARKER...))
+        push!(labels, "best size")
+    end
     Legend(
         figure[cld(length(ORDER), COLUMNS)+1, 1:COLUMNS],
-        [
-            LineElement(color = series_colour(level), linewidth = 3) for
-            level in eachindex(SIZES)
-        ],
-        [string(Int(kwp), " kWp") for kwp in SIZES];
+        handles,
+        labels;
         orientation = :horizontal,
         framevisible = false,
     )
@@ -123,6 +149,7 @@ save_figure(
         "EUR",
         "Net present value over $(LIFETIME_YEARS) years at $(round(Int, 100DISCOUNT_RATE))% discount";
         zero_line = true,
+        mark_max = true,
     ),
 )
 save_figure(FIGS, "annual-savings", facet(:annual_savings, "EUR/year", "Annual savings"))
