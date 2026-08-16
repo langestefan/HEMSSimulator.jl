@@ -149,3 +149,16 @@ Adjacent battery sizes are not reliably distinguishable. The dispatch LP is dege
 receding horizon amplifies it — see the tie-break notes in `CLAUDE.md` — leaving roughly €0.4/year of
 solver-dependent noise in the annual bill, which is comparable to the NPV gap between neighbouring
 candidates. The *shape* of the curve is trustworthy; a €6 difference between 7.5 and 10 kWh is not.
+`summary.jl` reports the gap to the runner-up for exactly this reason, and names every pair that
+should be read as a range instead of a number.
+
+**The candidate grid stops at 30 kWh, and below about 250 EUR/kWh the optimum runs into it.** At the
+cheap end of `investment.jl`'s price sweep several cells return 30 kWh, which means "at least 30" and
+not "30" — the answer there is censored by the grid, deliberately and not by oversight. Two reasons
+it is left that way. The economically interesting question is what to buy at today's prices, where
+the optimum is 7.5–15 kWh and sits comfortably inside the grid. And the convention that every
+candidate is a **two-hour** battery is already strained at 30 kWh, which is 15 kW against a 17.25 kW
+connection: a 50 kWh two-hour pack would be 25 kW, more than the connection can absorb in either
+direction, so its extra power would be fiction and only its extra energy real. Extending the grid
+therefore means choosing a longer duration for the large candidates — a modelling decision, not a
+grid one — and that is a different study.
