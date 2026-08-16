@@ -26,7 +26,19 @@ const BATTERY_HOURS = 2.0
 const INVERTER_RATIO = 0.9           # AC rating as a fraction of DC, typical for a NL rooftop
 
 const DEGRADATION = 0.02             # EUR/kWh of throughput, dispatch objective only
-const CAPEX = capacity -> 400 + 400 * capacity      # EUR, installed
+
+# Installed cost, split into the part that scales with capacity and the part that does not — the
+# inverter, the wall bracket, the electrician's day. Splitting it is what lets `capex.jl` sweep the
+# cell price without also pretending a 2.5 kWh pack installs itself for a quarter of the cost.
+#
+# **Capex reaches nothing but the investment arithmetic.** It is absent from the dispatch objective,
+# absent from the bill, and absent from the simulation cache key, so changing it re-prices a study
+# without re-solving a single window. `capex.jl` sweeps it from 100 to 400 EUR/kWh on exactly that
+# basis, and `RESULTS_PER_KWH` is only the value `results.csv` happens to have been written at.
+const FIXED_CAPEX = 400.0
+const RESULTS_PER_KWH = 400.0
+const CAPEX_LADDER = [100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0]
+const CAPEX = capacity -> FIXED_CAPEX + RESULTS_PER_KWH * capacity
 const DISCOUNT_RATE = 0.0            # see 001: this study asks what is saved, not what it could earn
 const LIFETIME_YEARS = 15
 const RATED_CYCLES = 6000.0          # a representative home-LFP warranty; whether it binds is output
