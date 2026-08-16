@@ -27,6 +27,7 @@
 using DataFrames
 using HEMSSimulator: Investment, cashflows, npv, irr, payback, effective_lifetime
 using Printf: @printf, @sprintf
+using Statistics: mean, std
 
 include(joinpath(@__DIR__, "..", "common.jl"))
 include(joinpath(@__DIR__, "run-config.jl"))
@@ -167,6 +168,82 @@ for rate in DISCOUNT_LADDER
     )
     println()
 end
+
+# ---------------------------------------------------------------------------------------------
+# A sizing rule of thumb, and how it moves with the cell price.
+#
+# The optimum is close to linear in the array, but **not proportional to it**: at a low enough cell
+# price a battery is worth buying with no solar at all, so the line has an intercept and quoting a
+# single "kWh per kWp" would be wrong at both ends. Fitted as `kWh = a + b x kWp` by least squares
+# across every scenario and array at each price.
+#
+# Cells whose optimum is the largest candidate on the grid are **excluded, not clipped**. They mean
+# "at least 30 kWh" rather than "30 kWh" (see the README), and since censoring bites hardest at the
+# large arrays it would drag the slope down exactly where the slope is being measured. The count of
+# excluded cells is printed: where it is large, the fit rests on the small arrays alone and the rule
+# should not be trusted.
+
+const CENSOR = maximum(BATTERY_KWH)
+
+function sizing_rule(per_kwh, rate)
+    arrays, capacities, censored = Float64[], Float64[], 0
+    for name in ORDER, kwp in SIZES
+        pick = best(at(; scenario = name, kwp, per_kwh, rate))
+        pick === nothing && continue
+        if pick.battery_kwh >= CENSOR - 1e-9
+            censored += 1
+            continue
+        end
+        push!(arrays, kwp)
+        push!(capacities, pick.battery_kwh)
+    end
+    length(arrays) >= 4 && length(unique(arrays)) >= 2 || return nothing
+    x̄, ȳ = mean(arrays), mean(capacities)
+    slope = sum((arrays .- x̄) .* (capacities .- ȳ)) / sum((arrays .- x̄) .^ 2)
+    intercept = ȳ - slope * x̄
+    residual = capacities .- (intercept .+ slope .* arrays)
+    spread = length(residual) > 2 ? std(residual) : NaN
+    return (; intercept, slope, spread, n = length(arrays), censored)
+end
+
+println("\n", "="^96)
+println(
+    "Sizing rule: NPV-optimal battery as kWh = a + b x kWp, fitted across all scenarios",
+)
+println(
+    "(cells at the 30 kWh grid edge are excluded — they mean \"at least 30\", not \"30\")",
+)
+println("="^96)
+@printf(
+    "%12s%10s%12s%14s%22s\n",
+    "EUR/kWh",
+    "rate",
+    "a (kWh)",
+    "b (kWh/kWp)",
+    "scatter / cells used"
+)
+for per_kwh in CAPEX_LADDER, rate in (DISCOUNT_RATE, last(DISCOUNT_LADDER))
+    fit = sizing_rule(per_kwh, rate)
+    @printf("%12.0f%9.0f%%", per_kwh, 100rate)
+    fit === nothing && (println("            — every cell is at the grid edge"); continue)
+    @printf(
+        "%12.1f%14.2f%12.1f kWh, %2d of %2d\n",
+        fit.intercept,
+        fit.slope,
+        fit.spread,
+        fit.n,
+        fit.n + fit.censored
+    )
+end
+println(
+    "\nAt today's prices the rule is roughly one kWh of battery per kWp of array plus a small",
+)
+println(
+    "fixed part; as cells get cheaper both the slope and the standalone battery grow, and below",
+)
+println(
+    "about 250 EUR/kWh the grid edge starts removing the cells the slope is measured from.",
+)
 
 # ---------------------------------------------------------------------------------------------
 # The rate-independent verdict. This is the column to read if the question is "how good an
