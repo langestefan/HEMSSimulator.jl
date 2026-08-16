@@ -112,6 +112,37 @@ run will be roughly half of what a fully loaded one delivers.
 
 `data/best-by-scenario.csv` is the NPV-maximising battery for each (scenario, array) pair.
 
+## Reading it back
+
+Two scripts turn the table into answers. Neither needs a solver and neither needs Makie, so both run
+in seconds:
+
+```bash
+julia --project=. experiments/002-factorial-sizing/summary.jl      # sizing, sensitivity, confidence
+julia --project=. experiments/002-factorial-sizing/investment.jl   # price and discount-rate sweeps
+```
+
+`summary.jl` reports the optimal battery per (scenario, array), what each factor is worth against
+`base` with the sizing decision re-optimised inside it, and how far each winner beats its runner-up
+— because a winner inside the solver noise is not a winner.
+
+`investment.jl` re-prices the whole study at cell prices from 100 to 400 EUR/kWh and discount rates
+from 0 to 4%, and reports the break-even cell price. **This costs no simulations.** Neither capex nor
+the discount rate reaches the dispatch objective, the bill, or the cache key, so what the home does
+with its battery is identical in every one of them. `degradation_cost` is the one economic-sounding
+parameter that is *not* free — it belongs to the battery and does shape dispatch.
+
+Three properties of the arithmetic worth holding on to, all of which follow from `cashflows`
+building an **undiscounted** flow vector with the rate applied only in `npv`:
+
+- **IRR, payback and effective lifetime do not move with the discount rate.** Only NPV does.
+- **The rate at which NPV reaches zero is the IRR**, so the discount sweep traces a line whose
+  x-intercept is already reported. IRR is the better single answer to "how good an investment".
+- **There are three different "optimal" sizes** and they disagree. The NPV-maximising size shrinks as
+  the discount rate rises and grows as the cell price falls; the IRR-maximising size is always the
+  smallest battery on the grid, because a rate of return says nothing about how much money is made.
+  The tables rank by NPV and report that candidate's IRR.
+
 ## Reading the numbers
 
 Adjacent battery sizes are not reliably distinguishable. The dispatch LP is degenerate and the

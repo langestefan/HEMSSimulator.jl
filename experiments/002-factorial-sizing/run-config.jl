@@ -38,6 +38,15 @@ const DEGRADATION = 0.02             # EUR/kWh of throughput, dispatch objective
 const FIXED_CAPEX = 400.0
 const RESULTS_PER_KWH = 400.0
 const CAPEX_LADDER = [100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0]
+
+# The rate a euro next year is worth less than a euro today, in real terms. Swept for the same
+# reason as the cell price and at the same cost — nothing: `cashflows` builds an *undiscounted* flow
+# vector and the rate enters only in `npv`, so one simulated case re-prices at every rate at once.
+#
+# Note what does *not* move with it. IRR, payback and effective lifetime are properties of the flows
+# and are identical at every rate; and the rate at which NPV reaches zero is the IRR by definition,
+# so the sweep traces a line whose x-intercept is already reported.
+const DISCOUNT_LADDER = [0.0, 0.01, 0.02, 0.03, 0.04]
 const CAPEX = capacity -> FIXED_CAPEX + RESULTS_PER_KWH * capacity
 const DISCOUNT_RATE = 0.0            # see 001: this study asks what is saved, not what it could earn
 const LIFETIME_YEARS = 15
