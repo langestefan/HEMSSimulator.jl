@@ -43,7 +43,13 @@ const SOLVED = joinpath(DATA, "solved.txt")
 println("fetching inputs")
 weather = openmeteo_weather(SITE, YEAR)
 prices = entsoe_prices(YEAR)
-load = synthetic_load(YEAR; annual_kwh = HOUSEHOLD_KWH)
+# One load series per distinct household size. `synthetic_load` is deterministic, so the base case
+# reproduces exactly what every earlier wave was solved against and their cache entries stay valid.
+loads = Dict(
+    size => synthetic_load(YEAR; annual_kwh = size) for
+    size in unique(s.household_kwh for s in SCENARIOS)
+)
+load = loads[BASE_CASE.household_kwh]
 
 println(
     "  day-ahead mean ",
@@ -97,19 +103,20 @@ contract_of(config) = contracts[contract_key(config.scenario)]
 # `inputs` depends on the array layout and on the contract, and on nothing else that varies within a
 # scenario — so all 10 battery sizes of one (orientation, array, contract) share it. Prepared once
 # per distinct triple rather than once per configuration.
-prepared = Dict{Tuple{Symbol,Float64,Any},SimulationInputs}()
+prepared = Dict{Any,SimulationInputs}()
 for s in SCENARIOS, kwp in PV_KWP
-    key = (s.orientation, float(kwp), contract_key(s))
+    key = inputs_key(s, kwp)
     haskey(prepared, key) && continue
-    reference = HomeSystem(site = SITE, pv = arrays(kwp, s.orientation))
-    prepared[key] =
-        prepare(reference, weather, load, contracts[contract_key(s)]; options = OPTIONS)
+    reference = HomeSystem(site = SITE, pv = arrays(kwp, s.orientation, s.tilt))
+    prepared[key] = prepare(
+        reference,
+        weather,
+        loads[s.household_kwh],
+        contracts[contract_key(s)];
+        options = OPTIONS,
+    )
 end
-inputs_for(config) = prepared[(
-    config.scenario.orientation,
-    float(config.kwp),
-    contract_key(config.scenario),
-)]
+inputs_for(config) = prepared[inputs_key(config.scenario, config.kwp)]
 
 log_lock = ReentrantLock()
 open(SOLVED, "a") do io

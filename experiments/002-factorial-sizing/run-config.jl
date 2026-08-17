@@ -83,7 +83,11 @@ const INVESTMENT =
 # contract fields reproduce `tibber_contract` exactly. Every simulation cached by an earlier wave
 # therefore stays valid — which is the only reason this could be extended mid-study.
 const BASE_CASE = (;
+    household_kwh = 3500.0,          # base load over the year, excluding the car
     orientation = :south,            # :south, or :east_west split across two roof faces
+    tilt = 35,                       # degrees from horizontal
+    degradation = 0.02,              # EUR/kWh of battery throughput, dispatch objective only
+    ev_weekdays_only = true,
     ev_kwh_per_day = 10.0,           # on workdays only
     ev_charge_kw = 12.0,
     connection_kw = 17.25,           # 3x25 A at 230 V. Single phase is not modelled: this is the
@@ -180,31 +184,37 @@ const WAVE_3 = [
 # through intermediate fractions, and suppliers have separately begun charging for export. Both
 # change what a kWh sent to the grid is worth, which is precisely what a battery competes against.
 const WAVE_4 = [
-    scenario("netting-quarter"; net_metering = 0.25),
-    scenario("netting-half"; net_metering = 0.5),
-    scenario("netting-three-quarter"; net_metering = 0.75),
-    # A per-kWh charge on export. The package's `feed_in_fee` is a flat annual amount and so cannot
-    # change any dispatch decision; a charge levied per exported kWh can, and is what makes storing
-    # a surplus better than selling it.
-    scenario("export-charge"; transport = :export_charge),
-    scenario("export-charge+netting-half"; transport = :export_charge, net_metering = 0.5),
     # The world most Dutch households were in until recently: a fixed price and full salderen. The
     # battery should be worth almost nothing here, and this says how nearly nothing.
     scenario("flat-tariff+net-metering"; tariff = :flat, net_metering = 1.0),
+    # **The house itself.** Every run so far has had exactly 3500 kWh of base load, which is the one
+    # untested assumption sitting underneath the whole study: self-consumption is the ratio of
+    # generation to demand, and holding the denominator fixed while sweeping the numerator answers
+    # only half the question.
+    scenario("small-household"; household_kwh = 2000.0),
+    scenario("large-household"; household_kwh = 5000.0),
+    # A car that also drives at weekends: the same annual mileage, spread over seven days instead of
+    # five, so it is home for less of the summer generation.
+    scenario("weekend-driver"; ev_weekdays_only = false),
+    # Roof pitch, which is not a decision anyone gets to make twice. A shallow roof spreads
+    # generation across the day; a steep one favours the winter sun and the evening.
+    scenario("flat-roof"; tilt = 15),
+    scenario("steep-roof"; tilt = 50),
 ]
 
-# Wave 5 — the hardware and the habits, rather than the tariff.
+# Wave 5 — the hardware, rather than the tariff or the house.
 const WAVE_5 = [
     # Power against energy, either side of the two-hour default.
     scenario("1-hour-battery"; battery_hours = 1.0),
     scenario("3-hour-battery"; battery_hours = 3.0),
-    # A pack that holds back a fifth rather than a twentieth. Nameplate capacity is not usable
-    # capacity, and the gap between them is a spec sheet's most common exaggeration.
-    scenario("shallow-battery"; battery_soc_min = 0.20),
-    scenario("small-ev"; ev_capacity_kwh = 40.0),
-    scenario("big-ev"; ev_capacity_kwh = 80.0),
     # A car that is home for most of the day: it can absorb the midday peak the house cannot.
     scenario("home-worker"; ev_departure = 9.5, ev_return = 15.5, ev_kwh_per_day = 5.0),
+    scenario("large-connection"; connection_kw = 24.15),   # 3x35 A at 230 V
+    # What the optimizer believes a cycle costs. Unlike capex this is *in the dispatch objective*,
+    # so it changes the flows and genuinely needs simulating — it is the one economic-sounding
+    # parameter that `investment.jl` cannot sweep for free.
+    scenario("cheap-wear"; degradation = 0.005),
+    scenario("costly-wear"; degradation = 0.05),
 ]
 
 # Wave 6 — the biggest levers found so far, crossed with each other.
@@ -228,12 +238,9 @@ const WAVE_6 = [
     scenario("v2g+tou-transport"; v2g_kw = 12.0, transport = :time_of_use),
     scenario("v2g+high-mileage"; v2g_kw = 12.0, ev_kwh_per_day = 20.0),
     scenario("east-west+net-metering"; orientation = :east_west, net_metering = 1.0),
-    scenario(
-        "efficient+export-charge";
-        battery_efficiency = 0.975,
-        ev_efficiency = 0.95,
-        transport = :export_charge,
-    ),
+    # The largest house under the most permissive rule: if netting makes a battery pointless, it is
+    # worth checking that it is *most* pointless where there is most demand to self-consume against.
+    scenario("large-household+net-metering"; household_kwh = 5000.0, net_metering = 1.0),
 ]
 
 const WAVES = (WAVE_1, WAVE_2, WAVE_3, WAVE_4, WAVE_5, WAVE_6)
@@ -263,22 +270,39 @@ const OPTIONS = RunOptions(
 # ---------------------------------------------------------------------------------------------
 # Building the home a configuration describes.
 
-function arrays(kwp::Real, orientation::Symbol)
+function arrays(kwp::Real, orientation::Symbol, tilt::Real = 35)
     kwp > 0 || return PVArray[]
     ac(dc) = dc * INVERTER_RATIO
     orientation === :south && return [
-        PVArray(dc_capacity_kwp = kwp, ac_capacity_kw = ac(kwp), tilt = 35, azimuth = 180),
+        PVArray(
+            dc_capacity_kwp = kwp,
+            ac_capacity_kw = ac(kwp),
+            tilt = tilt,
+            azimuth = 180,
+        ),
     ]
     orientation === :east_west && return [
         PVArray(
             dc_capacity_kwp = kwp / 2,
             ac_capacity_kw = ac(kwp / 2),
-            tilt = 35,
+            tilt = tilt,
             azimuth = azimuth,
         ) for azimuth in (90, 270)
     ]
     throw(ArgumentError("unknown orientation $orientation"))
 end
+
+# What identifies the exogenous series a configuration needs: the array layout, the size of the house
+# and the contract. Two scenarios agreeing on all of it share one `SimulationInputs`; two disagreeing
+# on any of it are genuinely different simulations. Household size is in here because it changes the
+# *load series*, which is an input rather than an asset.
+inputs_key(scenario, kwp) = (
+    scenario.orientation,
+    scenario.tilt,
+    float(kwp),
+    scenario.household_kwh,
+    contract_key(scenario),
+)
 
 # A car pack is worth more per kWh than a home pack and is not the household's to wear out freely,
 # so V2G throughput is charged more than the home battery's. Without a cost here the optimizer cycles
@@ -295,13 +319,13 @@ function home(scenario, kwp::Real; grid::TimeGrid = YEAR)
         kwh_per_day = scenario.ev_kwh_per_day,
         departure_hour = scenario.ev_departure,
         return_hour = scenario.ev_return,
-        weekdays_only = true,
+        weekdays_only = scenario.ev_weekdays_only,
         charge_efficiency = scenario.ev_efficiency,
         discharge_efficiency = scenario.ev_efficiency,
     )
     return HomeSystem(
         site = SITE,
-        pv = arrays(kwp, scenario.orientation),
+        pv = arrays(kwp, scenario.orientation, scenario.tilt),
         assets = AbstractAsset[car],
         connection_kw = scenario.connection_kw,
     )
@@ -313,7 +337,7 @@ battery(scenario, kwh::Real) = Battery(
     charge_efficiency = scenario.battery_efficiency,
     discharge_efficiency = scenario.battery_efficiency,
     soc_min = scenario.battery_soc_min,
-    degradation_cost = DEGRADATION,
+    degradation_cost = scenario.degradation,
 )
 
 # ---------------------------------------------------------------------------------------------
