@@ -88,11 +88,15 @@ acting on the current quarter-hour is metering it, not predicting it.
   - `seed`: the draw is deterministic given the seed, so a study is reproducible and two candidate
     batteries face *the same weather surprise* rather than being scored against different luck.
 
-Prices are deliberately untouched; see [`AbstractForecast`](@ref).
+`price_sigma` defaults to **zero** and should usually stay there; see [`AbstractForecast`](@ref) for
+why the day-ahead price is known rather than forecast. It exists to measure what that knowledge is
+worth — a controller with no access to the auction result, or one planning past the horizon the
+auction covers, is a different and much blinder animal.
 """
 struct NoisyForecast <: AbstractForecast
     pv_sigma::Float64
     load_sigma::Float64
+    price_sigma::Float64
     horizon_hours::Float64
     correlation_hours::Float64
     seed::Int
@@ -101,6 +105,7 @@ end
 function NoisyForecast(;
     pv_sigma::Real = 0.15,
     load_sigma::Real = 0.30,
+    price_sigma::Real = 0.0,
     horizon_hours::Real = 1.5,
     correlation_hours::Real = 6.0,
     seed::Integer = 1,
@@ -110,14 +115,85 @@ function NoisyForecast(;
         throw(ArgumentError("load_sigma must be non-negative; got $load_sigma"))
     horizon_hours > 0 ||
         throw(ArgumentError("horizon_hours must be positive; got $horizon_hours"))
-    correlation_hours > 0 || throw(
-        ArgumentError("correlation_hours must be positive; got $correlation_hours"),
-    )
+    correlation_hours > 0 ||
+        throw(ArgumentError("correlation_hours must be positive; got $correlation_hours"))
     return NoisyForecast(
         float(pv_sigma),
         float(load_sigma),
+        float(price_sigma),
         float(horizon_hours),
         float(correlation_hours),
         Int(seed),
     )
 end
+
+"""
+    BlockBias(; hours, pv_bias = 0.0, load_bias = 0.0, horizon_hours = 1.5)
+
+A forecast that is **systematically wrong about one part of the day** and right about the rest.
+
+Random noise answers "how much does accuracy matter on average". It cannot answer "what if we are
+simply wrong about the night", because a symmetric error that changes sign every few hours is not
+what a bad forecast looks like — a bad forecast is confidently wrong in one direction across a whole
+block, and the controller commits to that belief.
+
+`load_kwh` is an **absolute** misjudgement spread evenly over the block, in kWh per occurrence of it:
+`load_kwh = -5` means the controller believes the block will draw 5 kWh less than it does. The
+relative form is the wrong instrument when the quantity is small — this model's base load between
+midnight and six is 1.0 kWh, so a 50% error is half a kilowatt-hour and cannot cost anything. An
+absolute offset is how to ask "what if we are wrong by an amount that matters", and the amount that
+matters usually comes from the car rather than the house.
+
+`hours` are **Dutch local clock hours** of the *target* interval, not of the moment the plan is made:
+`0:5` means the controller misjudges the small hours whenever it looks at them. `load_bias = -0.5`
+means it believes that block will draw half of what it really does.
+
+The same lead-time ramp as [`NoisyForecast`](@ref) applies, so the interval being implemented now is
+still metered rather than guessed. Without it the test would measure a broken meter rather than a
+broken forecast.
+"""
+struct BlockBias <: AbstractForecast
+    hours::Vector{Int}
+    pv_bias::Float64
+    load_bias::Float64
+    load_kwh::Float64
+    horizon_hours::Float64
+end
+
+function BlockBias(;
+    hours,
+    pv_bias::Real = 0.0,
+    load_bias::Real = 0.0,
+    load_kwh::Real = 0.0,
+    horizon_hours::Real = 1.5,
+)
+    return BlockBias(
+        sort!(collect(Int, hours)),
+        float(pv_bias),
+        float(load_bias),
+        float(load_kwh),
+        float(horizon_hours),
+    )
+end
+
+"""
+    HiddenLoad(profile_kw; horizon_hours = 1.5)
+
+The controller cannot see a known part of the load coming.
+
+`profile_kw` spans the whole horizon and is subtracted from what the controller believes, clamped at
+zero. It is the model of an appliance the EMS is blind to — most usefully **a car on a dumb charger
+the energy manager does not know about**, which is the only thing in a Dutch house big enough to make
+a night misjudgement expensive. Relative noise cannot express this: the base load between midnight
+and six is about 1 kWh, so no percentage error on it reaches the 5-15 kWh a car represents.
+
+The usual lead-time ramp applies, so the load is still metered as it happens. What the controller
+loses is the ability to *anticipate* it — to hold charge back, or to buy cheaply before it arrives.
+"""
+struct HiddenLoad <: AbstractForecast
+    profile_kw::Vector{Float64}
+    horizon_hours::Float64
+end
+
+HiddenLoad(profile_kw::AbstractVector; horizon_hours::Real = 1.5) =
+    HiddenLoad(collect(Float64, profile_kw), float(horizon_hours))

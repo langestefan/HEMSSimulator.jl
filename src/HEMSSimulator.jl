@@ -147,7 +147,8 @@ export consumption_columns, production_columns
 
 # Simulation
 export SimulationResult, simulate, build_window, solve_window
-export AbstractForecast, PerfectForecast, NoisyForecast, forecast_window
+export AbstractForecast,
+    PerfectForecast, NoisyForecast, BlockBias, HiddenLoad, forecast_window
 export imported_kwh, exported_kwh, produced_kwh, consumed_kwh
 export self_consumption, self_sufficiency, balance_residual, onsite_sinks, onsite_supply
 export energy_flows, solar_use, source_mix
