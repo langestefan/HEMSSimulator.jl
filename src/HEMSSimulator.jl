@@ -120,7 +120,14 @@ __init__() = _register_plot_hint()
 export TimeGrid, Site, Weather
 export ProgressBar, step!
 export hours,
-    timestamps, timestamp, window, intervals_per_day, extraterrestrial, decompose, Erbs
+    timestamps,
+    timestamp,
+    window,
+    intervals_per_day,
+    dutch_hours,
+    extraterrestrial,
+    decompose,
+    Erbs
 
 # Solar
 export AbstractTranspositionModel, Isotropic, HayDavies, Perez

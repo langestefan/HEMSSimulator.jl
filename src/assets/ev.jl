@@ -15,8 +15,14 @@ modelling an EV: the charging is flexible, the departure is not.
 
 # Keyword arguments
 
-  - `departure_hour`, `return_hour`: clock hours, UTC like every timestamp here. Overnight trips are
-    not supported — `departure_hour` must be before `return_hour`.
+  - `departure_hour`, `return_hour`: clock hours. Overnight trips are not supported —
+    `departure_hour` must be before `return_hour`.
+  - `clock`: which clock those hours are on. `:utc` matches every timestamp in this package and is
+    the default so that existing results are unchanged; `:dutch` reads them on the wall clock the
+    household actually lives by, summer time included. **`:dutch` is what you want for a study.** A
+    commute is defined in local time, and on `:utc` a nominal 07:30 departure is really 08:30 in
+    winter and 09:30 in summer — a schedule that drifts an hour across the year and overlaps the
+    evening peak differently in each half of it. See [`dutch_hours`](@ref).
   - `kwh_per_day`: energy per driving day. A number, or a function of the `Date` for a variable
     pattern. Defaults to 8 kWh if neither this nor `km_per_day` is given.
   - `km_per_day`, `kwh_per_km`: the same thing expressed as distance × efficiency. Give one or the
@@ -33,7 +39,10 @@ function ev_schedule(
     kwh_per_km::Real = 0.18,
     weekdays_only::Bool = true,
     target_soc::Real = 0.8,
+    clock::Symbol = :utc,
 )
+    clock in (:utc, :dutch) ||
+        throw(ArgumentError("clock must be :utc or :dutch, got $clock"))
     0 <= departure_hour < return_hour <= 24 || throw(
         ArgumentError(
             "need 0 <= departure_hour < return_hour <= 24, got $departure_hour and " *
@@ -59,15 +68,27 @@ function ev_schedule(
     end
 
     times = timestamps(grid)
+    # On the Dutch clock the day a trip belongs to, and whether it is a weekend, must both be read
+    # locally too — otherwise a late-evening interval lands on the wrong calendar day and its
+    # departure target is attached to the wrong morning.
+    hours_of =
+        clock === :dutch ? dutch_hours(grid) :
+        [Dates.hour(t) + Dates.minute(t) / 60 for t in times]
+    local_times =
+        clock === :dutch ?
+        [
+            t + Hour(round(Int, hours_of[k] - (Dates.hour(t) + Dates.minute(t) / 60))) for
+            (k, t) in enumerate(times)
+        ] : times
     connected = trues(grid.n)
     trip_kwh = zeros(Float64, grid.n)
     target = zeros(Float64, grid.n)
 
     away = Dict{Date,Vector{Int}}()
     for k = 1:grid.n
-        t = times[k]
+        t = local_times[k]
         (weekdays_only && isweekend(t)) && continue
-        hour = Dates.hour(t) + Dates.minute(t) / 60
+        hour = hours_of[k]
         departure_hour <= hour < return_hour || continue
         connected[k] = false
         push!(get!(Vector{Int}, away, Date(t)), k)
@@ -206,6 +227,7 @@ function ElectricVehicle(
     kwh_per_km::Real = 0.18,
     weekdays_only::Bool = true,
     target_soc::Real = 0.8,
+    clock::Symbol = :utc,
     kwargs...,
 )
     schedule = ev_schedule(
@@ -217,6 +239,7 @@ function ElectricVehicle(
         kwh_per_km,
         weekdays_only,
         target_soc,
+        clock,
     )
     return ElectricVehicle(;
         capacity_kwh = float(capacity_kwh),

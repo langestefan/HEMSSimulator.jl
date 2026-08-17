@@ -127,3 +127,43 @@ Whether `t` falls on a Saturday or Sunday. Used by load profiles and by time-of-
 in the Netherlands are usually defined on working days only.
 """
 isweekend(t::DateTime) = dayofweek(t) in (6, 7)
+
+"""
+    dutch_hours(grid::TimeGrid) -> Vector{Float64}
+
+Clock hour in Dutch local time for each interval of `grid`, summer time included.
+
+Every timestamp in this package is UTC, which is the right internal convention and the wrong one for
+anything a household experiences. A commute, a network peak window and a time-of-use tariff are all
+defined on the clock on the wall, and that clock is UTC+1 for part of the year and UTC+2 for the
+rest. Applying a fixed hour to UTC timestamps is therefore wrong for one end of the year whichever
+constant is chosen, and wrong by exactly the width of the ramp most of these windows are trying to
+capture.
+
+Summer time runs from the last Sunday in March to the last Sunday in October, switching at 01:00 UTC
+on both days. That rule has been stable since 2002 and is applied here rather than depending on a
+timezone database.
+
+Returns fractional hours, so `7.5` is 07:30.
+"""
+function dutch_hours(grid::TimeGrid)
+    last_sunday(year, month) = (
+        day = Date(year, month, Dates.daysinmonth(Date(year, month)));
+        day - Dates.Day(mod(dayofweek(day), 7))
+    )
+    stamps = timestamps(grid)
+    # A grid can straddle a new year, so the boundaries are resolved per calendar year rather than
+    # once from the first timestamp.
+    boundaries = Dict{Int,Tuple{DateTime,DateTime}}()
+    for t in stamps
+        y = Dates.year(t)
+        get!(boundaries, y) do
+            (DateTime(last_sunday(y, 3)) + Hour(1), DateTime(last_sunday(y, 10)) + Hour(1))
+        end
+    end
+    return map(stamps) do t
+        from, to = boundaries[Dates.year(t)]
+        local_time = t + Hour(from <= t < to ? 2 : 1)
+        Dates.hour(local_time) + Dates.minute(local_time) / 60
+    end
+end
