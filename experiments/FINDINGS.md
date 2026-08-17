@@ -131,9 +131,30 @@ forecast accuracy (€12). It is the largest single controllable figure in these
 €519 against a scheduled one — €97 more, because there is more mistiming to clean up. The two
 investments are partly redundant, and the charger is the cheaper of the two.
 
-Scope: this is the value of *control*, not of *prediction*. In the dumb arm the EMS still sees the
-charging profile exactly; it simply cannot move it. What an EMS loses by not *anticipating* an
-unknown car is a separate quantity and is still open.
+**Anticipating the car is worth almost nothing; controlling it is worth everything.** Adding a third
+arm — the EMS blind to the charging until the meter sees it (`HiddenLoad`) — separates the two:
+
+| EMS | no battery | with 10 kWh battery |
+|---|--:|--:|
+| sees the charging profile coming | €995 | €379 |
+| blind to the car until it draws | €995 | €385 |
+
+**€6/year for anticipation against €361 for control.** The mechanism is that the battery is already
+full of solar by evening, so when the car starts drawing the battery discharges into it as a
+*reaction*; no plan is required. Anticipation would only pay if the charge had to be held back from
+something else, or bought cheaply in advance — and with import at €0.24 against export at €0.11, grid
+pre-charging almost never pays while solar charging happens regardless. The no-battery row is the
+sanity check: identical either way, because with no storage there is nothing to plan with.
+
+This is also what settles the "underestimate the night by 5 kWh" question. The predicted loss needs
+the controller to be unable to cover the surprise; it can, because the storage it would have reserved
+is already charged. What costs money is the car charging at the wrong *time*, and only control fixes
+that.
+
+> **Method note.** An earlier attempt to test this with a 5 kWh absolute night underestimate was
+> void: believed load is clamped at zero and the night contains 1.04 kWh, so 1, 2.5, 5 and 10 kWh
+> errors all collapsed to the same 1 kWh error and returned the same €8.90. A percentage or an
+> absolute offset on the *base load* cannot express a car-sized event. `HiddenLoad` can.
 
 ---
 
