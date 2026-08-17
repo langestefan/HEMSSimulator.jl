@@ -200,7 +200,34 @@ worst** — but the two are substitutes, not independent goods.
 
 ---
 
-## 4. Known gaps — things the model currently hands the controller for free
+## 4. A longer horizon helps the car, not the battery
+
+6 kWp, perfect foresight, bill in EUR by battery size and planning horizon:
+
+| window | 0 kWh | 5 kWh | 10 kWh | 15 kWh | 20 kWh | best | battery saves |
+|---|--:|--:|--:|--:|--:|:--:|--:|
+| 24 h | 634 | 306 | 115 | −18 | −104 | 10 kWh | 519 |
+| 36 h | 606 | 278 | 84 | −49 | −137 | 10 kWh | 522 |
+| 48 h | 540 | 224 | 44 | −80 | −166 | 10 kWh | 496 |
+| 72 h | 520 | 204 | 24 | −96 | −179 | 10 kWh | 496 |
+
+**The NPV-optimal battery is 10 kWh at every horizon**, so experiment 002's sizing answer is not an
+artefact of the 24 h window it happened to use.
+
+> **Correction.** It was claimed earlier that a 48 h window beats 24 h by €71/year and that
+> experiment 002 therefore *understates* the battery. The first half is right about the bill and the
+> second half is wrong. The battery's saving is flat at €496-522 across all four horizons: the bill
+> falls by €114 from 24 h to 72 h, but the **no-battery arm falls by the same €114**. Every NPV in
+> 002 is a difference between those arms, so the horizon cancels and the published NPVs stand.
+
+The extra lookahead accrues almost entirely to scheduling **the car** — consistent with everything in
+section 3. Returns diminish (24→36 h buys €28, 36→48 buys €66, 48→72 buys €20), and the gain shown
+is an upper bound: prices are held perfect across the whole window here, while a 72 h plan reaches
+almost entirely past what the day-ahead auction publishes.
+
+---
+
+## 5. Known gaps — things the model currently hands the controller for free
 
 These are not caveats on the findings above; they are reasons some of those findings may be
 optimistic, listed so they are not forgotten.
