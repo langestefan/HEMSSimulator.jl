@@ -528,9 +528,15 @@ end
 # A second asset of the same type writes to a suffixed column; carry that suffix into the label so
 # two batteries are distinguishable, and only then. The asset's own index is not the suffix — an EV
 # that happens to be asset 2 is still the only EV.
-function _flow_label(declared::Symbol, column::Symbol)
+# Takes names rather than `Symbol`s specifically: a DataFrame column may be addressed either way, and
+# the two loops that call this iterate a tuple of asset declarations that inference widens. Narrowing
+# to `Symbol` left a call path JET could reach and no method could serve.
+function _flow_label(
+    declared::Union{AbstractString,Symbol},
+    column::Union{AbstractString,Symbol},
+)
     text = replace(string(declared), "_kw" => "", "_" => " ")
-    column === declared && return text
+    string(column) == string(declared) && return text
     suffix = replace(string(column), string(declared) => "", "_" => "")
     return "$text ($suffix)"
 end

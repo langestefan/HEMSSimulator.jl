@@ -124,12 +124,15 @@ source_mix(result, "ev charge")   # (; total_kwh = 2_600.0, PV = 0.41, grid = 0.
 function source_mix(result::SimulationResult, sink::AbstractString)
     flows = energy_flows(result)
     rows = flows[flows.sink .== sink, :]
-    isempty(rows) && throw(
-        ArgumentError(
-            "no sink named \"$sink\"; this result has " *
-            join(sort(unique(flows.sink)), ", "),
-        ),
-    )
+    if isempty(rows)
+        # The type assertion is load-bearing, not decoration. `flows.sink` is a DataFrame column and
+        # so infers as `AbstractVector`; `unique` of that is `Any`, `join` of an `Any` collection
+        # widens to include `Nothing`, and `Nothing` has no `*` against the message prefix — which
+        # JET reports as an error path in this package. `energy_flows` always builds this column from
+        # `String` labels, so naming that here is a statement of fact.
+        known = join(sort!(unique(flows.sink::Vector{String})), ", ")
+        throw(ArgumentError("no sink named \"$sink\"; this result has $known"))
+    end
     total = sum(rows.kwh)
     shares = NamedTuple(
         Symbol(replace(row.source, " " => "_")) => (total > 0 ? row.kwh / total : NaN)
