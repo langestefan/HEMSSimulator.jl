@@ -151,6 +151,29 @@ the controller to be unable to cover the surprise; it can, because the storage i
 is already charged. What costs money is the car charging at the wrong *time*, and only control fixes
 that.
 
+**The split holds without sun and in winter.** The €6 rested on one well-lit configuration and on a
+mechanism — "the battery is already full of solar by evening" — that must fail when there is no sun.
+Tested across four cases:
+
+| case | control | anticipation |
+|---|--:|--:|
+| full year, 6 kWp | €263 | €6 |
+| full year, 0 kWp | €239 | €20 |
+| December, 6 kWp | €212 | €10 |
+| December, 0 kWp | €224 | €8 |
+
+Anticipation triples without solar, so the mechanism is real — but it is *minor*. The dominant reason
+is simpler: **a car plugged in at 19:30 has twelve hours before it leaves, and the cheapest hours of
+the day sit inside that window.** Reserving charge in advance and discovering the car and buying at
+03:00 cost nearly the same, because the deadline is loose. December with no solar — the darkest,
+flattest case — gives anticipation its *lowest* value of all, €8.
+
+**Control is stable at €212-263 across every case**, with sun and without, midsummer and midwinter.
+That is the robust finding: integrate the charger, do not bother predicting the car.
+
+(December rows annualise a single month, so their *levels* read pessimistically; only the gaps
+between arms are meaningful.)
+
 > **Method note.** An earlier attempt to test this with a 5 kWh absolute night underestimate was
 > void: believed load is clamped at zero and the night contains 1.04 kWh, so 1, 2.5, 5 and 10 kWh
 > errors all collapsed to the same 1 kWh error and returned the same €8.90. A percentage or an
