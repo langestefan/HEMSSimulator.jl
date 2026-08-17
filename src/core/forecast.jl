@@ -43,7 +43,7 @@ simulation written before forecasts existed, bit for bit.
 struct PerfectForecast <: AbstractForecast end
 
 """
-    NoisyForecast(; pv_sigma = 0.15, load_sigma = 0.30, horizon_hours = 12.0,
+    NoisyForecast(; pv_sigma = 0.15, load_sigma = 0.30, horizon_hours = 1.5,
                   correlation_hours = 6.0, seed = 1)
 
 A forecast whose error grows with lead time and is **correlated in time**.
@@ -73,6 +73,16 @@ acting on the current quarter-hour is metering it, not predicting it.
     day-ahead irradiance forecast and a single household's load, which is far noisier than a
     substation's because there is no aggregation to smooth it.
   - `horizon_hours`: lead time at which the error reaches `1 - 1/e` of its saturation value.
+    **This is the parameter that decides the answer, and it is easy to set far too high.** An early
+    version of this used 12 h, which gives the controller a 2.8% view of one hour ahead — nothing
+    about a single household's 15-minute load is that predictable. It made imperfect foresight look
+    almost free, and it was an artefact: near-term accuracy is exactly what protects the evening
+    discharge decision, where the controller judges how much charge tonight needs before selling the
+    rest. Measured at 6 kWp with a 10 kWh battery, moving from a 12 h ramp to a 0.5 h one raised the
+    annual cost of the same saturation error from EUR 3.06 to EUR 13.05, and the battery sold 34 kWh
+    a year more than it should have — energy then bought back across a 13.3 ct/kWh spread. The
+    default of 1.5 h puts roughly a fifth of the saturation error one hour out, which is the right
+    order for a household.
   - `correlation_hours`: how long an error persists. Short values approach white noise and will
     understate the cost of forecasting badly.
   - `seed`: the draw is deterministic given the seed, so a study is reproducible and two candidate
@@ -91,7 +101,7 @@ end
 function NoisyForecast(;
     pv_sigma::Real = 0.15,
     load_sigma::Real = 0.30,
-    horizon_hours::Real = 12.0,
+    horizon_hours::Real = 1.5,
     correlation_hours::Real = 6.0,
     seed::Integer = 1,
 )

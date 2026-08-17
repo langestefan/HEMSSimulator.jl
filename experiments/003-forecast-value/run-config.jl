@@ -49,14 +49,26 @@ const INVESTMENT =
 # from one of weather or load, then "buy a better forecast" has a specific and much cheaper meaning
 # than improving both.
 
+# `horizon_hours` is held at 1.5 across the ladder so that only the *size* of the error varies and
+# the levels stay comparable. It is not a free choice: at 1.5 h roughly a fifth of the saturation
+# error is present one hour out, which is the right order for a single household's 15-minute load.
+# An earlier version of this study used the constructor's old 12 h default, which put 2.8% error one
+# hour ahead and understated the cost of blindness roughly fourfold. See `NoisyForecast`.
+const RAMP = 1.5
+
 const FORECASTS = [
     (name = "perfect", forecast = PerfectForecast()),
-    (name = "good", forecast = NoisyForecast(pv_sigma = 0.10, load_sigma = 0.20, seed = 1)),
-    (name = "typical", forecast = NoisyForecast(pv_sigma = 0.20, load_sigma = 0.35, seed = 1)),
-    (name = "poor", forecast = NoisyForecast(pv_sigma = 0.40, load_sigma = 0.60, seed = 1)),
-    # One source at a time, at the "typical" level, to apportion the loss.
-    (name = "pv-only", forecast = NoisyForecast(pv_sigma = 0.20, load_sigma = 0.0, seed = 1)),
-    (name = "load-only", forecast = NoisyForecast(pv_sigma = 0.0, load_sigma = 0.35, seed = 1)),
+    (name = "good",
+        forecast = NoisyForecast(pv_sigma = 0.10, load_sigma = 0.25, horizon_hours = RAMP, seed = 1)),
+    (name = "typical",
+        forecast = NoisyForecast(pv_sigma = 0.20, load_sigma = 0.40, horizon_hours = RAMP, seed = 1)),
+    (name = "poor",
+        forecast = NoisyForecast(pv_sigma = 0.35, load_sigma = 0.60, horizon_hours = RAMP, seed = 1)),
+    # One source at a time, at the "typical" level, to apportion the loss between them.
+    (name = "pv-only",
+        forecast = NoisyForecast(pv_sigma = 0.20, load_sigma = 0.0, horizon_hours = RAMP, seed = 1)),
+    (name = "load-only",
+        forecast = NoisyForecast(pv_sigma = 0.0, load_sigma = 0.40, horizon_hours = RAMP, seed = 1)),
 ]
 
 # ---------------------------------------------------------------------------------------------
