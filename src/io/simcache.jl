@@ -1,16 +1,28 @@
 """
-    simulation_key(system::HomeSystem, inputs::SimulationInputs, options::RunOptions) -> String
+    simulation_key(system, inputs, options, forecast = PerfectForecast()) -> String
 
 The cache key for one simulation: a SHA-256 digest of everything [`simulate`](@ref) reads.
 
-That is exactly `system`, `inputs` and `options` — the contract is deliberately absent, because
+That is `system`, `inputs`, `options` and the forecast — the contract is deliberately absent, because
 `simulate` never sees it. Settlement happens afterwards from the flows, so two contracts that produce
 the same dispatch price signal share a cached result and two that do not have different `inputs`.
 
 The digest walks the structs by *reflection*, not through `show`: this package's `show` methods are
 readable summaries, and a summary that omits a field would let a changed input hit a stale entry.
+
+**A [`PerfectForecast`](@ref) contributes nothing to the digest**, so every key predating forecasts is
+unchanged and stays valid. That is not a cosmetic choice: reflection over a struct means *adding a
+field to `RunOptions` invalidates every entry in the cache*, and this package now has studies with
+thousands of cached annual simulations behind them. A new option that leaves behaviour untouched at
+its default should leave the keys untouched too — so put it here, next to the forecast, rather than
+in `RunOptions`.
 """
-function simulation_key(system::HomeSystem, inputs::SimulationInputs, options::RunOptions)
+function simulation_key(
+    system::HomeSystem,
+    inputs::SimulationInputs,
+    options::RunOptions,
+    forecast::AbstractForecast = PerfectForecast(),
+)
     ctx = IOBuffer()
     # A version tag, so a change to what a `SimulationResult` contains invalidates every entry
     # rather than loading a frame that no longer has the columns the caller expects.
@@ -18,6 +30,7 @@ function simulation_key(system::HomeSystem, inputs::SimulationInputs, options::R
     _digest!(ctx, system)
     _digest!(ctx, inputs)
     _digest!(ctx, options)
+    forecast isa PerfectForecast || _digest!(ctx, forecast)
     return bytes2hex(sha256(take!(ctx)))
 end
 

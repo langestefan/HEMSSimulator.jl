@@ -32,14 +32,15 @@ function simulate(
     system::HomeSystem,
     inputs::SimulationInputs;
     options::RunOptions = RunOptions(),
+    forecast::AbstractForecast = PerfectForecast(),
     progress = nothing,
     cache::Bool = false,
 )
-    cache || return _simulate(system, inputs, options, progress)
-    key = simulation_key(system, inputs, options)
+    cache || return _simulate(system, inputs, options, forecast, progress)
+    key = simulation_key(system, inputs, options, forecast)
     hit = _load_simulation(key, system, inputs.grid)
     hit === nothing || return hit
-    result = _simulate(system, inputs, options, progress)
+    result = _simulate(system, inputs, options, forecast, progress)
     _store_simulation(key, result)
     return result
 end
@@ -48,6 +49,7 @@ function _simulate(
     system::HomeSystem,
     inputs::SimulationInputs,
     options::RunOptions,
+    forecast::AbstractForecast,
     progress,
 )
     grid = inputs.grid
@@ -81,6 +83,7 @@ function _simulate(
     first_interval = 1
     windows = 0
     solve_time = 0.0
+    overrun = 0
     meter_clashes = 0
     asset_clashes = 0
     while first_interval <= grid.n
@@ -90,7 +93,7 @@ function _simulate(
         ctx = DispatchContext(
             window(grid, first_interval, len),
             dt,
-            window(inputs, first_interval, len),
+            forecast_window(forecast, inputs, first_interval, len),
             options,
             first_interval,
         )
@@ -102,9 +105,12 @@ function _simulate(
         asset_clashes += degeneracy.assets
 
         rows = first_interval:(first_interval+implemented-1)
-        frame.import_kw[rows] .= value.(vars.imported[1:implemented])
-        frame.export_kw[rows] .= value.(vars.exported[1:implemented])
-        frame.curtail_kw[rows] .= value.(vars.curtail[1:implemented])
+        # The plan was made against what the controller *believed*. What gets implemented is the
+        # asset setpoints — those are commands, and they happen — while the meter absorbs whatever
+        # the belief got wrong. `recourse!` writes the grid flows that actually result, against the
+        # true series. Under `PerfectForecast` it reproduces the solver's own values exactly, which
+        # a test asserts.
+        overrun += recourse!(frame, system, vars, inputs, rows, implemented)
         for (index, (asset, avars)) in enumerate(zip(system.assets, vars.assets))
             for (name, values) in pairs(result_columns(asset, avars, implemented))
                 # Resolved once, on this asset's first window. Recomputing it every window would
@@ -135,6 +141,12 @@ function _simulate(
             meter_clashes asset_intervals = asset_clashes windows
     end
 
+    # A forecast error can ask the meter for more than the connection can carry. The model has no
+    # mechanism for shedding load, so the flow is recorded and the violation reported rather than
+    # quietly clamped — clamping would break the energy balance every downstream number relies on.
+    overrun > 0 && @warn "the connection limit was exceeded after forecast error; the flows " *
+          "are recorded as they balance, not as a meter could deliver them" intervals = overrun
+
     for (name, values) in asset_columns
         frame[!, name] = values
     end
@@ -160,9 +172,64 @@ function simulate(
     load_kw::AbstractVector,
     contract::Contract;
     options::RunOptions = RunOptions(),
+    forecast::AbstractForecast = PerfectForecast(),
     progress = nothing,
     cache::Bool = false,
 )
     inputs = prepare(system, weather, load_kw, contract; options)
-    return simulate(system, inputs; options, progress, cache)
+    return simulate(system, inputs; options, forecast, progress, cache)
+end
+
+"""
+    recourse!(frame, system, vars, truth, rows, implemented) -> Int
+
+Write the grid flows that actually result from implementing a plan, and return how many intervals
+asked the connection for more than it can carry.
+
+The plan came from an optimization over what the controller *believed*. Three things then happen when
+it meets reality, and the split between them is the whole modelling content of imperfect foresight:
+
+  - **Asset setpoints are commands, so they happen.** Charging the battery at 3 kW charges it at
+    3 kW whatever the sun does. Their trajectories, and therefore the state carried into the next
+    window, are exactly as planned — which is why `carry_state` needs no adjustment.
+  - **Curtailment cannot exceed what arrived.** A plan to spill 4 kW of a forecast 6 kW spills only
+    what is there if 3 kW turns up.
+  - **The meter absorbs the rest.** Whatever the balance still needs is imported or exported, and
+    that residual is precisely the cost of having been wrong.
+
+Only when the surplus exceeds the connection is anything further thrown away, because at that point
+there is nowhere for it to go.
+
+Under [`PerfectForecast`](@ref) the true series are the believed ones, the residual is the LP's own
+import minus its own export, and every number written here equals the value the solver returned.
+"""
+function recourse!(frame, system, vars, truth::SimulationInputs, rows, implemented::Integer)
+    connection = system.connection_kw
+    planned = zeros(Float64, implemented)          # asset production minus asset consumption
+    for (asset, avars) in zip(system.assets, vars.assets)
+        terms = power_terms(asset, avars)
+        for k = 1:implemented
+            planned[k] += value(terms.production[k]) - value(terms.consumption[k])
+        end
+    end
+    overrun = 0
+    for (k, row) in enumerate(rows)
+        pv = truth.pv_kw[row]
+        curtail = min(value(vars.curtail[k]), pv)
+        net = (pv - curtail) + planned[k] - truth.load_kw[row]
+        if net >= 0
+            export_kw = min(net, connection)
+            # Anything above the connection has nowhere to go, so it is spilled on top of whatever
+            # the plan already meant to spill.
+            curtail += net - export_kw
+            frame.export_kw[row] = export_kw
+            frame.import_kw[row] = 0.0
+        else
+            frame.export_kw[row] = 0.0
+            frame.import_kw[row] = -net
+            -net > connection + 1e-9 && (overrun += 1)
+        end
+        frame.curtail_kw[row] = curtail
+    end
+    return overrun
 end

@@ -74,6 +74,7 @@ using Statistics: median
 # Include order is significant: each directory only depends on the ones above it.
 include("core/timegrid.jl")     # the uniform 15-minute grid everything is aligned to
 include("core/resample.jl")     # putting a source series on that grid
+include("core/forecast.jl")     # what a controller believes; `RunOptions` carries one
 include("core/types.jl")        # asset contract, run options, dispatch context, constants
 include("core/progress.jl")     # terminal progress bar for the long-running simulations
 
@@ -96,6 +97,7 @@ include("model/system.jl")      # the home and its precomputed exogenous series
 include("model/dispatch.jl")    # the JuMP model for one window
 include("model/results.jl")     # what a simulation produces
 include("model/rolling.jl")     # the receding-horizon driver
+include("model/forecast.jl")    # what the controller believes, as against what happens
 include("model/attribution.jl") # where each kWh came from and went
 
 include("market/settlement.jl") # the Dutch bill, computed from the flows
@@ -145,6 +147,7 @@ export consumption_columns, production_columns
 
 # Simulation
 export SimulationResult, simulate, build_window, solve_window
+export AbstractForecast, PerfectForecast, NoisyForecast, forecast_window
 export imported_kwh, exported_kwh, produced_kwh, consumed_kwh
 export self_consumption, self_sufficiency, balance_residual, onsite_sinks, onsite_supply
 export energy_flows, solar_use, source_mix
