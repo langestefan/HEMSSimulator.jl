@@ -174,6 +174,25 @@ That is the robust finding: integrate the charger, do not bother predicting the 
 (December rows annualise a single month, so their *levels* read pessimistically; only the gaps
 between arms are meaningful.)
 
+**Arrival time trades the two capabilities against each other.** Holding departure fixed at 07:30 UTC
+and moving only the return:
+
+| car returns (local summer) | control | anticipation |
+|---|--:|--:|
+| 17:30 | €184 | €7 |
+| 19:30 | €263 | €6 |
+| 21:30 | €206 | €9 |
+| 23:30 | €146 | €27 |
+
+Anticipation quadruples for a car arriving at 23:30 — it plugs in *after* the battery has spent
+itself on the evening peak, so a controller that knew would have reserved charge. That is a real
+effect and earlier tests missed it by only trying convenient arrival times.
+
+Control moves the opposite way, and for a clean reason: a dumb charger firing at 19:30 dumps 12 kW
+into the evening peak, the worst possible moment; the same charger firing at 23:30 is already in
+cheap hours and costs much less to leave alone. **Control still wins at every arrival time, by 5x at
+worst** — but the two are substitutes, not independent goods.
+
 > **Method note.** An earlier attempt to test this with a 5 kWh absolute night underestimate was
 > void: believed load is clamped at zero and the night contains 1.04 kWh, so 1, 2.5, 5 and 10 kWh
 > errors all collapsed to the same 1 kWh error and returned the same €8.90. A percentage or an
