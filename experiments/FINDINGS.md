@@ -219,7 +219,26 @@ clears around midday for the following day, so at 08:00 the controller knows 16 
 48 h plan almost always does. The €44 bill at a 48 h horizon is optimistic in a way the €115 at 24 h
 is not.
 
-**The EV drives on UTC, not Dutch local time.** `ev_schedule` reads `departure_hour` and
+**The EV drives on UTC, and it costs 2.3%.** *(Measured, and left in place deliberately.)*
+`ev_schedule` reads `departure_hour` and `return_hour` off UTC timestamps, so the nominal
+07:30-17:30 commute is really 08:30-18:30 local in winter and 09:30-19:30 in summer. The package can
+now do it properly — `ev_schedule(...; clock = :dutch)`, backed by `dutch_hours` — but the default
+stays `:utc` because changing it invalidates every cached simulation in every study already run.
+
+Measured at 10 kWh: the corrected schedule lowers the annual bill by €5.70 at 0 kWp, €11.90 at 6 kWp
+and €12.50 at 12 kWp — **a consistent −2.3% of the battery's saving, in the direction that flatters
+the battery.** Every figure in this file is therefore mildly pessimistic.
+
+It is not re-run because the effect is uniform in sign and nearly uniform in magnitude, so every
+candidate moves together: the sizing rule, the factor ranking, the EV control figures and the
+forecast decomposition are all unchanged in ordering. Switch the experiments to `:dutch` at the next
+occasion that re-solves anyway — a new wave, a new price year, or numbers going to publication.
+
+*Note on the threshold that decided this:* the rule first proposed was "re-run if the shift exceeds
+the solver noise floor", which it does by 30x. That was the wrong test. The right one is whether a
+conclusion moves, and none does.
+
+**The old note, for the record.** `ev_schedule` reads `departure_hour` and
 `return_hour` off UTC timestamps, so the default 07:30-17:30 is really 08:30-18:30 local in winter
 and 09:30-19:30 in summer — a schedule that drifts an hour with the season and is later than a
 typical Dutch commute. The same trap was handled correctly for the time-of-use transport tariff
