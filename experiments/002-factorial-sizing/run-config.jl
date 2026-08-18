@@ -88,6 +88,8 @@ const BASE_CASE = (;
     tilt = 35,                       # degrees from horizontal
     degradation = 0.02,              # EUR/kWh of battery throughput, dispatch objective only
     ev_weekdays_only = true,
+    has_ev = true,                   # a house without a car is a large share of households
+    heat_pump_kw = 0.0,              # 0 disables; otherwise the electric rating of the heat pump
     ev_kwh_per_day = 10.0,           # on workdays only
     ev_charge_kw = 12.0,
     connection_kw = 17.25,           # 3x25 A at 230 V. Single phase is not modelled: this is the
@@ -243,7 +245,24 @@ const WAVE_6 = [
     scenario("large-household+net-metering"; household_kwh = 5000.0, net_metering = 1.0),
 ]
 
-const WAVES = (WAVE_1, WAVE_2, WAVE_3, WAVE_4, WAVE_5, WAVE_6)
+# Wave 7 — the two loads the study has never varied: a house with no car, and a house with a heat
+# pump. Every one of the 1900 simulations so far has had exactly one EV and no heating load, which
+# makes the whole study a study of *that* house.
+const WAVE_7 = [
+    # No car at all. The battery then has no flexible load to compete with and no evening charging
+    # to displace — plausibly a very different answer, and untested until now.
+    scenario("no-ev"; has_ev = false),
+    scenario("no-ev+large-household"; has_ev = false, household_kwh = 5000.0),
+    scenario("no-ev+east-west"; has_ev = false, orientation = :east_west),
+    # A heat pump is the biggest load a Dutch house can add, and it lands in winter — precisely when
+    # the array cannot fill the battery. The package has supported one since the beginning and no
+    # experiment has ever used it.
+    scenario("heat-pump"; heat_pump_kw = 4.0),
+    scenario("heat-pump+no-ev"; heat_pump_kw = 4.0, has_ev = false),
+    scenario("heat-pump+large-household"; heat_pump_kw = 4.0, household_kwh = 5000.0),
+]
+
+const WAVES = (WAVE_1, WAVE_2, WAVE_3, WAVE_4, WAVE_5, WAVE_6, WAVE_7)
 
 # Which waves to run. Waves are cumulative, so this is a prefix: `HEMS_MAX_WAVE=4` runs waves 1-4 and
 # leaves 5 and 6 for a later invocation. It exists so a long unattended queue can refresh its tables
@@ -309,6 +328,13 @@ inputs_key(scenario, kwp) = (
 # someone else's expensive battery for nothing. Only reaches the objective when V2G is enabled.
 const EV_DEGRADATION = 0.05          # EUR/kWh of throughput, dispatch objective only
 
+# 120 m2 at 6 kW design heat loss: a typical Dutch terraced house, the same figures the tutorial
+# uses. The comfort band is the flexibility — inside it the optimizer may put the temperature where
+# it likes, so it can warm the fabric through a cheap afternoon and coast through the evening peak.
+const BUILDING = BuildingSpec(120.0; heat_loss_kw = 6.0)
+const SETPOINT = 20.0
+const COMFORT_BAND = 1.0
+
 function home(scenario, kwp::Real; grid::TimeGrid = YEAR)
     car = ElectricVehicle(
         grid;
@@ -323,10 +349,22 @@ function home(scenario, kwp::Real; grid::TimeGrid = YEAR)
         charge_efficiency = scenario.ev_efficiency,
         discharge_efficiency = scenario.ev_efficiency,
     )
+    assets = AbstractAsset[]
+    scenario.has_ev && push!(assets, car)
+    scenario.heat_pump_kw > 0 && push!(
+        assets,
+        HeatPump(
+            grid;
+            building = BUILDING,
+            setpoint = SETPOINT,
+            band = COMFORT_BAND,
+            max_power_kw = scenario.heat_pump_kw,
+        ),
+    )
     return HomeSystem(
         site = SITE,
         pv = arrays(kwp, scenario.orientation, scenario.tilt),
-        assets = AbstractAsset[car],
+        assets = assets,
         connection_kw = scenario.connection_kw,
     )
 end

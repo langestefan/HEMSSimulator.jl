@@ -87,6 +87,8 @@ function metrics(config, result, bill, baseline_bill)
             tilt = config.scenario.tilt,
             degradation = config.scenario.degradation,
             ev_weekdays_only = config.scenario.ev_weekdays_only,
+            has_ev = config.scenario.has_ev,
+            heat_pump_kw = config.scenario.heat_pump_kw,
             ev_kwh_per_day = config.scenario.ev_kwh_per_day,
             ev_charge_kw = config.scenario.ev_charge_kw,
             connection_kw = config.scenario.connection_kw,
