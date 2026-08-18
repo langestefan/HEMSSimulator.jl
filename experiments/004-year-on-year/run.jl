@@ -8,7 +8,7 @@
 using HEMSSimulator
 using DataFrames
 using Dates
-using Printf: @sprintf
+using Printf: @printf, @sprintf
 using Statistics: mean, quantile
 
 include(joinpath(@__DIR__, "..", "common.jl"))
