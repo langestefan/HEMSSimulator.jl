@@ -33,7 +33,7 @@ HEMSSimulatorMakieExt = "Makie"
 ENTSOE = {rev = "code-review-fixes", url = "https://github.com/langestefan/EntsoE.jl"}
 
 [compat]
-CSV = "0.10"
+CSV = "0.10, 1.1"
 DataFrames = "1"
 Dates = "1"
 ENTSOE = "1"
